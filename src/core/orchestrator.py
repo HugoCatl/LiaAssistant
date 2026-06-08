@@ -81,8 +81,8 @@ class Orchestrator(QObject):
         self.view.input_field.clear()
 
         # Update display logs
-        self.view.output_display.append(f"<br/><b>Tú:</b> {user_text}")
-        self.view.output_display.append("<b>LIA:</b> ")
+        self.view.output_display.append(f"<span style='color: #C084FC; font-weight: bold;'>Tú:</span> <span style='color: #F1F5F9;'>{user_text}</span>")
+        self.view.output_display.append("<span style='color: #A78BFA; font-weight: bold;'>LIA:</span> ")
         self.view.output_display.ensureCursorVisible()
 
         # Set UI state to processing
@@ -119,14 +119,15 @@ class Orchestrator(QObject):
                 # Append information log to the output display
                 cursor = self.view.output_display.textCursor()
                 cursor.movePosition(cursor.MoveOperation.End)
-                cursor.insertHtml(f"<br/><span style='color: #C084FC;'><i>[Ejecutando comando: Abrir {app_name}...]</i></span>")
+                prefix = "" if not self.view.output_display.toPlainText().strip() else "<br/>"
+                cursor.insertHtml(f"{prefix}<span style='color: #C084FC;'><i>[Ejecutando comando: Abrir {app_name}...]</i></span>")
                 self.view.output_display.ensureCursorVisible()
 
                 # Execute automation natively
                 result = open_application(app_name)
 
                 # Show command results in output display
-                cursor.insertHtml(f"<br/><span style='color: #00FF7F;'><i>[Sistema: {result}]</i></span><br/>")
+                cursor.insertHtml(f"<br/><span style='color: #00FF7F;'><i>[Sistema: {result}]</i></span>")
                 self.view.output_display.ensureCursorVisible()
 
     def on_error_occurred(self, err_msg: str):
@@ -174,7 +175,8 @@ class Orchestrator(QObject):
         # Notify user on UI
         cursor = self.view.output_display.textCursor()
         cursor.movePosition(cursor.MoveOperation.End)
-        cursor.insertHtml("<br/><span style='color: #F59E0B;'><i>[LIA: Procesando grabación de voz...]</i></span>")
+        prefix = "" if not self.view.output_display.toPlainText().strip() else "<br/>"
+        cursor.insertHtml(f"{prefix}<span style='color: #F59E0B;'><i>[LIA: Procesando grabación de voz...]</i></span>")
         self.view.output_display.ensureCursorVisible()
 
         # Launch background transcription QThread
@@ -193,7 +195,8 @@ class Orchestrator(QObject):
             # Fallback to idle if silence or audio couldn't resolve
             cursor = self.view.output_display.textCursor()
             cursor.movePosition(cursor.MoveOperation.End)
-            cursor.insertHtml("<br/><span style='color: #F87171;'><i>[LIA: No se detectó voz clara. Intente de nuevo.]</i></span><br/>")
+            prefix = "" if not self.view.output_display.toPlainText().strip() else "<br/>"
+            cursor.insertHtml(f"{prefix}<span style='color: #F87171;'><i>[LIA: No se detectó voz clara. Intente de nuevo.]</i></span>")
             self.view.output_display.ensureCursorVisible()
             self.state_manager.set_state(AssistantState.IDLE)
             return

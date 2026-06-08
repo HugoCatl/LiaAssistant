@@ -15,12 +15,15 @@ class InputField(QLineEdit):
                 border: 1px solid rgba(255, 255, 255, 0.12);
                 border-radius: 12px;
                 color: #FFFFFF;
-                padding: 14px 18px;
+                padding: 12px 18px;
                 font-family: 'Segoe UI', 'Outfit', 'Inter', sans-serif;
                 font-size: 14px;
             }
             QLineEdit:focus {
                 border: 1.5px solid #C084FC;
                 background-color: rgba(25, 20, 30, 0.88);
+            }
+            QLineEdit::placeholder {
+                color: rgba(255, 255, 255, 0.35);
             }
         """)

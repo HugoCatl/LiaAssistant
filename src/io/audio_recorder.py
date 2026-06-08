@@ -23,6 +23,12 @@ class AudioRecorder(QThread):
         self._is_recording = False
         self._audio_data = []
 
+        # Voice Activity Detection (VAD) parameters
+        self.speech_threshold = 0.012  # RMS energy to trigger speaking state
+        self.silence_threshold = 0.008 # RMS energy to classify as silence
+        self.silence_timeout = 1.6     # Seconds of silence to trigger auto-stop
+        self.max_recording_time = 20.0 # Maximum time limit in seconds
+
     def set_device(self, device_index):
         """Sets the active input device index."""
         self.device_index = device_index
@@ -34,13 +40,46 @@ class AudioRecorder(QThread):
     def run(self):
         self._audio_data = []
         self._is_recording = True
+
+        # VAD State variables
+        self.has_spoken = False
+        self.silence_frames = 0
+        self.total_recorded_frames = 0
+        self.max_silence_frames = int(self.silence_timeout * self.sample_rate)
+        self.max_recording_frames = int(self.max_recording_time * self.sample_rate)
+
         self.recording_started.emit()
 
         def stream_callback(indata, frames, time, status):
             if status:
                 print(f"[AudioRecorder] Status del stream: {status}")
-            # Append a copy of the audio block to buffer
+            
             self._audio_data.append(indata.copy())
+            self.total_recorded_frames += frames
+
+            # Calculate RMS energy of current audio block
+            rms = np.sqrt(np.mean(np.square(indata)))
+
+            if not self.has_spoken:
+                # Detect voice starting
+                if rms > self.speech_threshold:
+                    self.has_spoken = True
+                    self.silence_frames = 0
+                    print(f"[AudioRecorder] Voz detectada (RMS: {rms:.4f})")
+            else:
+                # Voice has started, detect silence
+                if rms < self.silence_threshold:
+                    self.silence_frames += frames
+                    if self.silence_frames >= self.max_silence_frames:
+                        print(f"[AudioRecorder] Silencio detectado por {self.silence_frames / self.sample_rate:.1f}s. Parando grabación.")
+                        self._is_recording = False
+                else:
+                    self.silence_frames = 0
+
+            # Absolute maximum recording time limit fallback
+            if self.total_recorded_frames >= self.max_recording_frames:
+                print("[AudioRecorder] Tiempo máximo de grabación alcanzado. Parando.")
+                self._is_recording = False
 
         try:
             # Query device info if a specific index was selected, or use default input device info

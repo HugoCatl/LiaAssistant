@@ -102,6 +102,57 @@ def test_audio_recorder_downmix(mock_wave_open, mock_input_stream):
     assert np.all(written_data == 0)
 
 
+@patch("sounddevice.InputStream")
+@patch("wave.open")
+def test_audio_recorder_vad_silence_stop(mock_wave_open, mock_input_stream):
+    """
+    Tests that AudioRecorder automatically terminates recording when voice
+    activity starts and then goes silent for more than the silence timeout.
+    """
+    recorder = AudioRecorder()
+    recorder.device_index = 0
+    recorder.sample_rate = 16000
+    recorder.silence_timeout = 0.1  # Very short silence timeout for testing
+    recorder.speech_threshold = 0.01
+    recorder.silence_threshold = 0.005
+
+    # Mock InputStream to simulate:
+    # 1. Block with voice (high RMS: 0.1)
+    # 2. Block with silence (low RMS: 0.0) -> exceeds silence timeout (0.1s)
+    # Each callback call processes a block of frames.
+    # At sample_rate = 16000, 0.1 seconds is 1600 frames.
+    # If we send a block of 2000 frames of silence, it should trigger auto-stop.
+    
+    def mock_input_stream_init(*args, **kwargs):
+        callback = kwargs.get('callback')
+        if callback:
+            # 1. Voice block: 320 frames with amplitude 0.1
+            voice_block = np.ones((320, 1), dtype=np.float32) * 0.1
+            callback(voice_block, 320, None, None)
+            
+            # Check voice state activated
+            assert recorder.has_spoken is True
+            
+            # 2. Silence block: 2000 frames with amplitude 0.0 (exceeds 1600 frames max silence)
+            silence_block = np.zeros((2000, 1), dtype=np.float32)
+            callback(silence_block, 2000, None, None)
+            
+        return MagicMock()
+
+    mock_input_stream.side_effect = mock_input_stream_init
+
+    with patch("PyQt6.QtCore.QThread.msleep"), \
+         patch("sounddevice.query_devices") as mock_query:
+        mock_query.return_value = {"default_samplerate": 16000, "max_input_channels": 1}
+        
+        # We start the loop
+        recorder.run()
+
+    # The loop should have terminated automatically
+    assert recorder._is_recording is False
+    mock_wave_open.assert_called_once()
+
+
 @patch("src.services.whisper_local.get_whisper_model")
 def test_transcription_worker_execution(mock_get_model):
     """
