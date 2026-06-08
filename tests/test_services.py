@@ -17,16 +17,9 @@ def test_os_automation_win32_mappings():
         assert "iniciada correctamente en Windows" in result_calc
         mock_startfile.assert_called_once_with("calc.exe")
 
-def test_os_automation_linux_mappings():
-    """Verifies that common application names map to Linux commands and launch via subprocess.Popen."""
-    with patch("sys.platform", "linux"), patch("subprocess.Popen") as mock_popen:
-        result = open_application("calculadora")
-        assert "iniciada correctamente en Linux" in result
-        mock_popen.assert_called_once_with(["gnome-calculator"], shell=False)
-
 def test_os_automation_file_not_found():
     """Verifies that os_automation handles missing binaries gracefully without raising exceptions."""
-    with patch("sys.platform", "win32"), patch("os.startfile", side_effect=FileNotFoundError):
+    with patch("os.startfile", side_effect=FileNotFoundError):
         result = open_application("programa_inexistente")
         assert "Error: No se pudo encontrar el archivo ejecutable" in result
 

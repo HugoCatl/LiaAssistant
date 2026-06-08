@@ -8,19 +8,19 @@ class InputField(QLineEdit):
     """
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setPlaceholderText("Pregúntame algo o escribe un comando...")
+        self.setPlaceholderText("Escribe un mensaje para LIA o ejecuta un comando...")
         self.setStyleSheet("""
             QLineEdit {
-                background-color: rgba(30, 30, 35, 0.6);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 8px;
+                background-color: rgba(25, 20, 30, 0.65);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 12px;
                 color: #FFFFFF;
-                padding: 12px 16px;
+                padding: 14px 18px;
                 font-family: 'Segoe UI', 'Outfit', 'Inter', sans-serif;
                 font-size: 14px;
             }
             QLineEdit:focus {
-                border: 1.5px solid #00F3FF;
-                background-color: rgba(30, 30, 35, 0.85);
+                border: 1.5px solid #C084FC;
+                background-color: rgba(25, 20, 30, 0.88);
             }
         """)

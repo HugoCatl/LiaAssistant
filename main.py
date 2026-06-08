@@ -11,7 +11,7 @@ from src.gui import View
 from src.io import KeyboardListener
 
 def main():
-    print("[Main] Initializing Omega Assistant base environment...")
+    print("[Main] Initializing LIA Assistant base environment...")
 
     # Initialize PyQt application
     app = QApplication(sys.argv)

@@ -8,8 +8,9 @@ from src.core.state_manager import AssistantState
 
 class View(QWidget):
     """
-    Main overlay view of the Omega Assistant.
+    Main overlay view of the LIA Assistant.
     Frameless, translucent background, stays on top, supports window dragging.
+    Styled with a sleek violet/purple glassmorphic theme.
     """
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -28,42 +29,42 @@ class View(QWidget):
         root_layout = QVBoxLayout(self)
         root_layout.setContentsMargins(15, 15, 15, 15)
 
-        # Main glassmorphic card container
+        # Main glassmorphic card container (violet/purple tone)
         self.card = QFrame(self)
         self.card.setObjectName("MainCard")
         self.card.setStyleSheet("""
             QFrame#MainCard {
-                background-color: rgba(20, 20, 25, 0.85);
-                border: 1px solid rgba(0, 243, 255, 0.25);
+                background-color: rgba(22, 16, 28, 0.88);
+                border: 1px solid rgba(192, 132, 252, 0.32);
                 border-radius: 16px;
             }
         """)
 
-        # Glow effect (Cyan drop shadow)
+        # Glow effect (Purple drop shadow)
         shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(20)
-        shadow.setColor(QColor(0, 243, 255, 50))  # Alpha 50 for a clean cyberpunk glow
+        shadow.setBlurRadius(25)
+        shadow.setColor(QColor(192, 132, 252, 60))  # Soft purple aura
         shadow.setOffset(0, 0)
         self.card.setGraphicsEffect(shadow)
 
         # Layout inside the main card
         card_layout = QVBoxLayout(self.card)
-        card_layout.setContentsMargins(18, 14, 18, 18)
-        card_layout.setSpacing(12)
+        card_layout.setContentsMargins(20, 16, 20, 20)
+        card_layout.setSpacing(14)
 
         # Title bar & controls layout
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Brand name
-        self.title_label = QLabel("Ω OMEGA ASSISTANT", self.card)
+        # Brand name (LIA ASSISTANT)
+        self.title_label = QLabel("✧ LIA ASSISTANT", self.card)
         self.title_label.setStyleSheet("""
             QLabel {
-                color: #00F3FF;
+                color: #C084FC;
                 font-family: 'Segoe UI', 'Outfit', 'Inter', sans-serif;
                 font-weight: 900;
-                font-size: 12px;
-                letter-spacing: 2px;
+                font-size: 13px;
+                letter-spacing: 2.5px;
             }
         """)
         header_layout.addWidget(self.title_label)
@@ -76,7 +77,7 @@ class View(QWidget):
         self.update_status_dot(AssistantState.IDLE)
         header_layout.addWidget(self.status_dot)
 
-        # Minimize/Hide Button (represented as close 'x')
+        # Close/Minimize Button (represented as close 'x')
         self.close_button = QPushButton("×", self.card)
         self.close_button.setFixedSize(22, 22)
         self.close_button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -90,7 +91,7 @@ class View(QWidget):
                 margin-top: -2px;
             }
             QPushButton:hover {
-                color: #FF5A5A;
+                color: #F87171;
             }
         """)
         self.close_button.clicked.connect(self.close_requested)
@@ -100,7 +101,7 @@ class View(QWidget):
 
         # Output text browser
         self.output_display = OutputDisplay(self.card)
-        self.output_display.setMinimumHeight(130)
+        self.output_display.setMinimumHeight(150)
         card_layout.addWidget(self.output_display)
 
         # User Input field
@@ -109,8 +110,8 @@ class View(QWidget):
 
         root_layout.addWidget(self.card)
 
-        # Window settings
-        self.resize(520, 320)
+        # New window dimensions (Wider, taller and sleeker)
+        self.resize(580, 360)
         self.center_on_screen()
 
         # Window drag status variables
@@ -129,12 +130,12 @@ class View(QWidget):
     def update_status_dot(self, state: AssistantState):
         """Updates the status dot color to reflect the assistant's state."""
         color_map = {
-            AssistantState.IDLE: "#00F3FF",        # Cyan
-            AssistantState.LISTENING: "#FF007F",   # Hot Pink
-            AssistantState.PROCESSING: "#FF8C00",  # Dark Orange
-            AssistantState.RESPONDING: "#7C4DFF"   # Deep Purple
+            AssistantState.IDLE: "#C084FC",        # Light Purple / Lilac
+            AssistantState.LISTENING: "#EC4899",   # Neon Pink / Fucsia
+            AssistantState.PROCESSING: "#F59E0B",  # Amber / Yellow-Orange
+            AssistantState.RESPONDING: "#3B82F6"   # Electric Blue
         }
-        color = color_map.get(state, "#00F3FF")
+        color = color_map.get(state, "#C084FC")
         self.status_dot.setStyleSheet(f"""
             QFrame {{
                 background-color: {color};
@@ -142,7 +143,7 @@ class View(QWidget):
                 border: 1px solid rgba(255, 255, 255, 0.2);
             }}
         """)
-        self.status_dot.setToolTip(f"Estado actual: {state.value}")
+        self.status_dot.setToolTip(f"Estado: {state.value}")
 
     def close_requested(self):
         """Hides the assistant overlay, keeping the background process alive."""

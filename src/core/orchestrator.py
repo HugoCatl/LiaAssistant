@@ -24,7 +24,7 @@ class Orchestrator(QObject):
     def start(self):
         """Starts the background listening thread."""
         self.keyboard_listener.start()
-        print("[Orchestrator] Sistema de Omega Assistant iniciado.")
+        print("[Orchestrator] Sistema de LIA Assistant iniciado.")
         print("[Orchestrator] Presione 'Shift_L + L' globalmente para mostrar/ocultar el panel.")
 
     def toggle_ui(self):
@@ -57,7 +57,7 @@ class Orchestrator(QObject):
 
         # Update display logs
         self.view.output_display.append(f"<br/><b>Tú:</b> {user_text}")
-        self.view.output_display.append("<b>Omega:</b> ")
+        self.view.output_display.append("<b>LIA:</b> ")
         self.view.output_display.ensureCursorVisible()
 
         # Set UI state to processing

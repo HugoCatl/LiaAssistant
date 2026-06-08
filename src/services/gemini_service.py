@@ -35,7 +35,7 @@ class GeminiWorker(QThread):
                 tools=[open_application],
                 temperature=0.2,  # Low temperature for reliable logical routing
                 system_instruction=(
-                    "Eres Omega Assistant, un asistente virtual de escritorio para Windows/Linux.\n"
+                    "Eres LIA Assistant, un asistente virtual de escritorio para Windows.\n"
                     "Si el usuario te pide abrir una aplicación (como bloc de notas, calculadora, chrome, etc.), "
                     "debes invocar la herramienta 'open_application' proporcionando el nombre de la aplicación. "
                     "No des explicaciones adicionales a menos que falle la herramienta o que el usuario haga preguntas generales."

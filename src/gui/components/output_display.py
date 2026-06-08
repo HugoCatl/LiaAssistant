@@ -9,7 +9,7 @@ class OutputDisplay(QTextBrowser):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setReadOnly(True)
-        self.setPlaceholderText("Las respuestas de Omega Assistant aparecerán aquí...")
+        self.setPlaceholderText("Las respuestas de LIA Assistant aparecerán aquí...")
         self.setStyleSheet("""
             QTextBrowser {
                 background-color: transparent;
@@ -32,7 +32,7 @@ class OutputDisplay(QTextBrowser):
                 border-radius: 3px;
             }
             QScrollBar::handle:vertical:hover {
-                background: rgba(0, 243, 255, 0.4);
+                background: rgba(192, 132, 252, 0.5);
             }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
                 border: none;

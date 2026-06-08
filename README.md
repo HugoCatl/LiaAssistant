@@ -1,6 +1,6 @@
-# Ω Omega Assistant - Asistente Virtual de Escritorio
+# ✧ LIA Assistant - Asistente Virtual de Escritorio
 
-Omega Assistant es un asistente virtual de escritorio de alto rendimiento, baja latencia y consumo optimizado diseñado para integrarse con el sistema operativo de forma nativa. Opera como un servicio en segundo plano (daemon) y se activa a través de interrupciones globales de teclado.
+LIA Assistant es un asistente virtual de escritorio de alto rendimiento, baja latencia y consumo optimizado diseñado para integrarse con el sistema operativo de forma nativa. Opera como un servicio en segundo plano (daemon) y se activa a través de interrupciones globales de teclado.
 
 ---
 
@@ -54,7 +54,7 @@ LiaAssistant/
 
 ## 🚀 Instalación y Puesta en Marcha
 
-Siga los siguientes pasos para configurar el entorno localmente en Windows/Linux:
+Siga los siguientes pasos para configurar el entorno localmente en Windows:
 
 ### 1. Requisitos Previos
 * **Python 3.10 o superior** instalado en el sistema.
@@ -66,11 +66,8 @@ Cree un entorno virtual limpio e instale las dependencias necesarias:
 # Crear el entorno virtual
 python -m venv venv
 
-# Activar el entorno virtual (Windows)
+# Activar el entorno virtual
 .\venv\Scripts\activate
-
-# Activar el entorno virtual (Linux/macOS)
-source venv/bin/activate
 
 # Instalar dependencias
 pip install -r requirements.txt
@@ -89,7 +86,7 @@ Edite el archivo `.env` para añadir su `GEMINI_API_KEY` u otras rutas locales (
 
 ## ⌨️ Uso de la Aplicación
 
-Inicie el servicio de Omega Assistant ejecutando:
+Inicie el servicio de LIA Assistant ejecutando:
 
 ```bash
 python main.py
