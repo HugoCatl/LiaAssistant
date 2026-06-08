@@ -1,0 +1,36 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Environments
+.env
+.venv
+venv/
+ENV/
+env/
+ENV/local/
+ENV/development/
+
+# Unit test / coverage reports
+.pytest_cache/
+.cache/
+.coverage
+htmlcov/
+
+# IDE and Project settings
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+desktop.ini

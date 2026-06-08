@@ -1,0 +1,6 @@
+PyQt6>=6.6.1
+pynput>=1.7.6
+pydantic>=2.6.1
+pydantic-settings>=2.1.0
+python-dotenv>=1.0.1
+pytest>=8.0.0
