@@ -7,7 +7,7 @@ from src.services.gemini_service import GeminiWorker
 
 def test_os_automation_win32_mappings():
     """Verifies that common application names map to Windows executables and use os.startfile."""
-    with patch("sys.platform", "win32"), patch("os.startfile") as mock_startfile:
+    with patch("os.startfile") as mock_startfile:
         result = open_application("bloc de notas")
         assert "iniciada correctamente en Windows" in result
         mock_startfile.assert_called_once_with("notepad.exe")
@@ -16,6 +16,27 @@ def test_os_automation_win32_mappings():
         result_calc = open_application("calculadora")
         assert "iniciada correctamente en Windows" in result_calc
         mock_startfile.assert_called_once_with("calc.exe")
+
+def test_os_automation_paint3d():
+    """Verifies that Paint 3D triggers ms-paint: protocol."""
+    with patch("os.startfile") as mock_startfile:
+        result = open_application("paint 3d")
+        assert "Paint 3D" in result
+        mock_startfile.assert_called_once_with("ms-paint:")
+
+def test_os_automation_teams():
+    """Verifies that Teams triggers ms-teams: UWP protocol."""
+    with patch("os.startfile") as mock_startfile:
+        result = open_application("teams")
+        assert "Microsoft Teams (UWP) iniciado" in result
+        mock_startfile.assert_called_once_with("ms-teams:")
+
+def test_os_automation_discord_fallback():
+    """Verifies Discord fallback triggers shell start when LocalAppData is missing."""
+    with patch("os.path.exists", return_value=False), patch("os.startfile") as mock_startfile:
+        result = open_application("discord")
+        assert "Discord invocado" in result
+        mock_startfile.assert_called_once_with("discord")
 
 def test_os_automation_file_not_found():
     """Verifies that os_automation handles missing binaries gracefully without raising exceptions."""

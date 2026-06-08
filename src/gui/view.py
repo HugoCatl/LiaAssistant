@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QGraphicsDropShadowEffect
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QGraphicsDropShadowEffect, QMenu
 from PyQt6.QtCore import Qt, QPoint
 from PyQt6.QtGui import QColor
 
@@ -77,7 +77,26 @@ class View(QWidget):
         self.update_status_dot(AssistantState.IDLE)
         header_layout.addWidget(self.status_dot)
 
-        # Close/Minimize Button (represented as close 'x')
+        # Settings/Microphone Config Button (⚙)
+        self.config_button = QPushButton("⚙", self.card)
+        self.config_button.setFixedSize(22, 22)
+        self.config_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.config_button.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: none;
+                color: rgba(255, 255, 255, 0.4);
+                font-size: 16px;
+                font-weight: bold;
+                margin-top: -1px;
+            }
+            QPushButton:hover {
+                color: #C084FC;
+            }
+        """)
+        header_layout.addWidget(self.config_button)
+
+        # Minimize/Hide Button (represented as close 'x')
         self.close_button = QPushButton("×", self.card)
         self.close_button.setFixedSize(22, 22)
         self.close_button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -104,9 +123,23 @@ class View(QWidget):
         self.output_display.setMinimumHeight(150)
         card_layout.addWidget(self.output_display)
 
+        # Bottom row (Input Field + Mic Button)
+        bottom_layout = QHBoxLayout()
+        bottom_layout.setContentsMargins(0, 0, 0, 0)
+        bottom_layout.setSpacing(10)
+
         # User Input field
         self.input_field = InputField(self.card)
-        card_layout.addWidget(self.input_field)
+        bottom_layout.addWidget(self.input_field)
+
+        # Microphone Toggle Button
+        self.mic_button = QPushButton("🎤", self.card)
+        self.mic_button.setFixedSize(45, 45)  # Mapped to input_field height
+        self.mic_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.set_recording_active(False)  # Apply base styles
+        bottom_layout.addWidget(self.mic_button)
+
+        card_layout.addLayout(bottom_layout)
 
         root_layout.addWidget(self.card)
 
@@ -144,6 +177,77 @@ class View(QWidget):
             }}
         """)
         self.status_dot.setToolTip(f"Estado: {state.value}")
+
+    def set_recording_active(self, active: bool):
+        """Applies visual recording feedback to the microphone button."""
+        if active:
+            # Active state: pulsing pink/magenta neon border
+            self.mic_button.setStyleSheet("""
+                QPushButton {
+                    background-color: rgba(236, 72, 153, 0.15);
+                    border: 2px solid #EC4899;
+                    border-radius: 12px;
+                    color: #EC4899;
+                    font-size: 18px;
+                }
+            """)
+        else:
+            # Standard glassmorphic state
+            self.mic_button.setStyleSheet("""
+                QPushButton {
+                    background-color: rgba(25, 20, 30, 0.65);
+                    border: 1px solid rgba(255, 255, 255, 0.12);
+                    border-radius: 12px;
+                    color: #C084FC;
+                    font-size: 18px;
+                }
+                QPushButton:hover {
+                    background-color: rgba(192, 132, 252, 0.15);
+                    border: 1px solid rgba(192, 132, 252, 0.4);
+                }
+                QPushButton:pressed {
+                    background-color: rgba(192, 132, 252, 0.3);
+                }
+            """)
+
+    def show_microphone_menu(self, devices: list, current_device_id, callback):
+        """
+        Dynamically generates and displays a context menu containing
+        a list of available audio input devices.
+        """
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: rgba(22, 16, 28, 0.95);
+                border: 1px solid rgba(192, 132, 252, 0.4);
+                border-radius: 8px;
+                color: #E2E8F0;
+                padding: 4px;
+                font-family: 'Segoe UI', 'Outfit', sans-serif;
+                font-size: 12px;
+            }
+            QMenu::item {
+                padding: 6px 20px 6px 24px;
+                background-color: transparent;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background-color: rgba(192, 132, 252, 0.25);
+                color: #FFFFFF;
+            }
+        """)
+
+        # Add an action for each device
+        for dev_id, dev_name in devices:
+            # Put a checkmark in front of the active device
+            display_name = f"✓ {dev_name}" if dev_id == current_device_id else dev_name
+            action = menu.addAction(display_name)
+            # Route trigger to callback
+            action.triggered.connect(lambda checked, d_id=dev_id: callback(d_id))
+
+        # Position menu right below the gear button
+        pos = self.config_button.mapToGlobal(QPoint(0, self.config_button.height()))
+        menu.exec(pos)
 
     def close_requested(self):
         """Hides the assistant overlay, keeping the background process alive."""
