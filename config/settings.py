@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     # Core API Keys
     gemini_api_key: Optional[str] = Field(None, validation_alias="GEMINI_API_KEY")
     gemini_model: str = Field("gemini-2.5-flash", validation_alias="GEMINI_MODEL")
+    gemini_model_reasoning: str = Field("gemini-2.5-pro", validation_alias="GEMINI_MODEL_REASONING")
 
     # Local storage (Obsidian vault path)
     obsidian_vault_path: Optional[Path] = Field(None, validation_alias="OBSIDIAN_VAULT_PATH")

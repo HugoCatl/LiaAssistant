@@ -23,6 +23,11 @@ class InputField(QLineEdit):
                 border: 1.5px solid #C084FC;
                 background-color: rgba(25, 20, 30, 0.88);
             }
+            QLineEdit:disabled {
+                background-color: rgba(20, 15, 25, 0.4);
+                color: rgba(255, 255, 255, 0.25);
+                border: 1px solid rgba(255, 255, 255, 0.05);
+            }
             QLineEdit::placeholder {
                 color: rgba(255, 255, 255, 0.35);
             }

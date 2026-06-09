@@ -162,12 +162,12 @@ class MicButton(QPushButton):
             self.setIcon(self.normal_icon)
             
     def enterEvent(self, event):
-        if not self.is_active:
+        if not self.is_active and self.isEnabled():
             self.setIcon(self.hover_icon)
         super().enterEvent(event)
         
     def leaveEvent(self, event):
-        if not self.is_active:
+        if not self.is_active and self.isEnabled():
             self.setIcon(self.normal_icon)
         super().leaveEvent(event)
 
@@ -371,6 +371,10 @@ class View(QWidget):
                 }
                 QPushButton:pressed {
                     background-color: rgba(192, 132, 252, 0.3);
+                }
+                QPushButton:disabled {
+                    background-color: rgba(20, 15, 25, 0.4);
+                    border: 1px solid rgba(255, 255, 255, 0.05);
                 }
             """)
 

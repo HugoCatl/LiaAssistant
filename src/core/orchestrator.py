@@ -3,7 +3,7 @@ import sounddevice as sd
 from PyQt6.QtCore import QObject
 from src.core.state_manager import StateManager, AssistantState
 from src.gui.view import View
-from src.services.gemini_service import GeminiWorker
+from src.services.gemini_service import GeminiWorker, GeminiReasoningWorker
 from src.services.os_automation import open_application
 from src.io.audio_recorder import AudioRecorder
 from src.services.whisper_local import TranscriptionWorker
@@ -34,7 +34,7 @@ class Orchestrator(QObject):
 
         # Setup GUI & keyboard signaling pipelines
         self.keyboard_listener.hotkey_triggered.connect(self.toggle_ui)
-        self.state_manager.state_changed.connect(self.view.update_status_dot)
+        self.state_manager.state_changed.connect(self.on_state_changed)
         self.view.input_field.returnPressed.connect(self.handle_input_submission)
 
         # Wire settings config wheel and microphone recording buttons
@@ -66,6 +66,37 @@ class Orchestrator(QObject):
             self.state_manager.set_state(AssistantState.LISTENING)
             print("[Orchestrator] Panel activado. Estado: LISTENING")
 
+    def on_state_changed(self, state: AssistantState):
+        """Maneja el comportamiento y la interfaz de usuario al cambiar de estado."""
+        self.view.update_status_dot(state)
+
+        # Bloquear o desbloquear controles según el estado actual
+        if state in (AssistantState.PROCESSING, AssistantState.RESPONDING):
+            self.view.input_field.setEnabled(False)
+            self.view.mic_button.setEnabled(False)
+        else:
+            self.view.mic_button.setEnabled(True)
+            # Deshabilitar entrada de texto solo si el grabador de audio está activo
+            is_recording = self.audio_recorder.isRunning()
+            self.view.input_field.setEnabled(not is_recording)
+            
+            if state == AssistantState.IDLE:
+                self.view.input_field.setFocus()
+
+    def detect_reasoning_intent(self, text: str) -> bool:
+        """
+        Analiza si el texto ingresado por el usuario es una pregunta o una petición
+        conversacional de consejo, recomendación o toma de decisiones complejas,
+        las cuales requieren el modelo Pro de razonamiento en lugar del Flash de acción.
+        """
+        keywords = [
+            "?", "¿", "recomienda", "aconseja", "hago", "decisión", "opinión", 
+            "piensas", "analiza", "gestionar", "situación", "duda", "rutina", 
+            "plan", "crear plan", "por qué", "cómo", "dónde", "quién", "cuál"
+        ]
+        text_lower = text.lower()
+        return any(kw in text_lower for kw in keywords)
+
     def handle_input_submission(self):
         """Handles user text submission and spawns the background Gemini worker."""
         # Prevent starting a new request if one is already running
@@ -88,12 +119,19 @@ class Orchestrator(QObject):
         # Set UI state to processing
         self.state_manager.set_state(AssistantState.PROCESSING)
 
-        # Create the background thread worker for the Gemini stream
-        self.worker = GeminiWorker(user_text)
+        # Enrutar inteligentemente según la intención
+        if self.detect_reasoning_intent(user_text):
+            print(f"[Orchestrator] Enrutando '{user_text}' al Agente de Razonamiento (Gemini Pro)...")
+            self.worker = GeminiReasoningWorker(user_text)
+        else:
+            print(f"[Orchestrator] Enrutando '{user_text}' al Agente de Acción Rápida (Gemini Flash)...")
+            self.worker = GeminiWorker(user_text)
         
         # Connect signals
         self.worker.token_received.connect(self.on_token_received)
         self.worker.tool_call_detected.connect(self.on_tool_call_detected)
+        self.worker.tool_call_completed.connect(self.on_tool_call_completed)
+        self.worker.tokens_consumed.connect(self.on_tokens_consumed)
         self.worker.error_occurred.connect(self.on_error_occurred)
         self.worker.finished.connect(self.on_generation_finished)
 
@@ -112,23 +150,53 @@ class Orchestrator(QObject):
         self.view.output_display.ensureCursorVisible()
 
     def on_tool_call_detected(self, name: str, args: dict):
-        """Routes detected tool calls to local OS automation functions."""
+        """Muestra en la interfaz visual que una herramienta está siendo ejecutada."""
+        cursor = self.view.output_display.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        prefix = "" if not self.view.output_display.toPlainText().strip() else "<br/>"
+        
+        info_msg = ""
         if name == "open_application":
-            app_name = args.get("app_name")
-            if app_name:
-                # Append information log to the output display
-                cursor = self.view.output_display.textCursor()
-                cursor.movePosition(cursor.MoveOperation.End)
-                prefix = "" if not self.view.output_display.toPlainText().strip() else "<br/>"
-                cursor.insertHtml(f"{prefix}<span style='color: #C084FC;'><i>[Ejecutando comando: Abrir {app_name}...]</i></span>")
-                self.view.output_display.ensureCursorVisible()
+            app_name = args.get("app_name", "")
+            info_msg = f"Abrir {app_name}"
+        elif name == "create_note":
+            title = args.get("title", "")
+            info_msg = f"Crear nota '{title}'"
+        elif name == "read_note":
+            title = args.get("title", "")
+            info_msg = f"Leer nota '{title}'"
+        elif name == "search_notes":
+            query = args.get("query", "")
+            info_msg = f"Buscar notas sobre '{query}'"
+        elif name == "write_note":
+            title = args.get("title", "")
+            info_msg = f"Editar/Escribir nota '{title}'"
+        elif name == "append_to_note":
+            title = args.get("title", "")
+            info_msg = f"Añadir a nota '{title}'"
+        else:
+            info_msg = f"Ejecutar {name}"
+            
+        cursor.insertHtml(f"{prefix}<span style='color: #C084FC;'><i>[Ejecutando comando: {info_msg}...]</i></span>")
+        self.view.output_display.ensureCursorVisible()
 
-                # Execute automation natively
-                result = open_application(app_name)
+    def on_tool_call_completed(self, name: str, result: str):
+        """Muestra en la interfaz visual el resultado de la ejecución de la herramienta."""
+        cursor = self.view.output_display.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        cursor.insertHtml(f"<br/><span style='color: #00FF7F;'><i>[Sistema: {result}]</i></span>")
+        self.view.output_display.ensureCursorVisible()
 
-                # Show command results in output display
-                cursor.insertHtml(f"<br/><span style='color: #00FF7F;'><i>[Sistema: {result}]</i></span>")
-                self.view.output_display.ensureCursorVisible()
+    def on_tokens_consumed(self, prompt_tokens: int, candidate_tokens: int, total_tokens: int):
+        """Muestra en la interfaz el consumo de tokens de la interacción."""
+        cursor = self.view.output_display.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        cursor.insertHtml(
+            f"<br/><span style='color: #6B7280; font-size: 11px; font-style: italic;'>"
+            f"[Tokens usados - Entrada: {prompt_tokens} | Salida: {candidate_tokens} | Total: {total_tokens}]"
+            f"</span><br/>"
+        )
+        self.view.output_display.ensureCursorVisible()
 
     def on_error_occurred(self, err_msg: str):
         """Displays errors on the output panel."""
