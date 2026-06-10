@@ -1,55 +1,38 @@
-# Plan de Implementación - Fase 4: Integración con Obsidian (Persistencia y Memoria a Largo Plazo)
+# Plan de Implementación - Respuestas Humanas y Naturales (Sin Detalles Técnicos)
 
-Proponer y estructurar la **Fase 4** del desarrollo de LIA Assistant, enfocada en la creación de su capa de memoria (Storage). El objetivo es conectar a LIA con un "Vault" (bóveda) local de Obsidian, dándole la capacidad de actuar como tu "Segundo Cerebro" (Second Brain).
+Este plan detalla el cambio en el comportamiento de respuesta de LIA para hacerla mucho más conversacional, natural y similar a una persona, evitando cualquier jerga técnica, mención a búsquedas de notas, o avisos de que está consultando u obteniendo información de archivos locales de Obsidian.
 
-## Resumen de la Fase 4
-
-LIA podrá guardar de forma autónoma resúmenes de conversaciones, recordar ideas clave que le dictes, o buscar información en tus notas pasadas directamente manipulando archivos Markdown locales de Obsidian. Todo esto será posible inyectando nuevas herramientas (Tools/Function Calling) en el enrutador lógico de Gemini.
-
----
-
-## Preguntas Abiertas
-
-> [!WARNING]
-> **Ruta del Vault de Obsidian**: Necesitarás configurar en el archivo `.env` la ruta absoluta hacia tu carpeta principal de Obsidian (`OBSIDIAN_VAULT_PATH=C:\Ruta\A\Tu\Vault`). ¿Tienes ya un Vault específico de pruebas para LIA o usaremos tu Vault personal principal?
+## User Review Required
 
 > [!IMPORTANT]
-> **Permisos y Modificación de Notas**: ¿Deseas que LIA tenga permisos absolutos para **sobrescribir/editar** notas existentes, o preferimos que por seguridad en esta fase solo pueda **crear nuevas notas** (añadiendo la fecha/hora en el título) y **leer/buscar** en el Vault? Mi recomendación es empezar con crear y leer, para proteger tus notas originales.
+> **Ocultar Origen de la Información**:
+> - LIA ya no dirá frases como: *"He buscado en tu nota..."*, *"De acuerdo a tus apuntes..."*, o *"He encontrado en Obsidian..."*. 
+> - En su lugar, responderá directamente de forma fluida y natural, actuando como si ella recordara la información por sí misma.
+>
+> **Confirmación Natural de Acciones**:
+> - En lugar de confirmar la creación de archivos con nombres técnicos (ej: *"He creado la nota 'Rutina de Gimnasio.md' en tu vault"*), LIA lo dirá de manera conversacional (ej: *"He guardado tu nueva rutina de gimnasio, espero que te sirva mucho para motivarte"*).
+LLL
+## Proposed Changes
 
----
+### Capa de Servicios
 
-## Cambios Propuestos
+#### [MODIFY] [gemini_service.py](file:///c:/LiaAssistant/src/services/gemini_service.py)
 
-### Capa de Persistencia y Memoria
+- **Actualizar `GeminiWorker` (Flash)**:
+  - Añadir directrices en su `system_instruction` para responder de forma concisa pero sumamente natural y humana.
+  - Prohibir terminantemente el uso de terminología sobre archivos, notas, llamadas de sistema o el origen de sus datos.
+- **Actualizar `GeminiReasoningWorker` (Pro)**:
+  - Robustecer su `system_instruction` con directrices de personalidad. LIA debe actuar como un mentor o amigo cercano.
+  - Prohibir cualquier mención técnica a Obsidian, notas específicas, o búsquedas realizadas en segundo plano. Cuando consulte la memoria del usuario, debe responder integrando la información de manera invisible y fluida (ej: si sabe que el usuario va al gimnasio Viver, responder *"Como vas al gimnasio Viver, te sugiero..."* en vez de *"He encontrado en tu nota de hobbies que vas al gimnasio Viver, por lo tanto..."*).
 
-#### [NUEVO] [obsidian_manager.py](file:///c:/LiaAssistant/src/storage/obsidian_manager.py)
-Creación del módulo base para interactuar con el sistema de archivos del Vault.
-- **Funciones principales**:
-  - `create_note(title: str, content: str, tags: list[str] = None)`: Crea un archivo `.md` en la carpeta base del Vault.
-  - `read_note(title: str) -> str`: Lee el contenido de una nota existente.
-  - `search_notes(query: str) -> list[str]`: Busca palabras clave dentro del contenido de todas las notas del Vault y devuelve los extractos relevantes.
+## Verification Plan
 
----
+### Automated Tests
+- Ejecutar `pytest` para comprobar que la lógica interna de los agentes de Gemini y el Orquestador no sufren regresiones.
 
-### Capa de Servicios Externos
-
-#### [MODIFICAR] [gemini_service.py](file:///c:/LiaAssistant/src/services/gemini_service.py)
-- Importar las funciones de `obsidian_manager.py`.
-- Añadir las funciones `create_note`, `read_note` y `search_notes` al arreglo de `tools` de la configuración de Gemini.
-- Actualizar la `system_instruction` para que LIA sepa de la existencia de su "Memoria" en Obsidian y sepa cuándo debe guardar información útil o buscarla si no sabe la respuesta a algo del usuario.
-
-#### [MODIFICAR] [orchestrator.py](file:///c:/LiaAssistant/src/core/orchestrator.py)
-- Añadir el enrutamiento lógico para interceptar cuándo Gemini llama a las funciones de Obsidian (en la señal `tool_call_detected`), ejecutarlas de forma asíncrona y devolverle a Gemini el resultado de la búsqueda o la confirmación de guardado.
-
----
-
-## Plan de Verificación
-
-### Pruebas Automatizadas
-- Crear el archivo `tests/test_storage.py` con pruebas unitarias para `obsidian_manager.py` usando un directorio temporal (mock_vault) para asegurar que se leen y escriben los archivos `.md` correctamente sin afectar un Vault real.
-
-### Verificación Manual
+### Manual Verification
 1. Iniciar la aplicación de LIA.
-2. Darle una orden de guardado: *"LIA, guarda en mis notas que la contraseña del router es 1234"* y comprobar en la UI que LIA confirma la acción.
-3. Verificar físicamente abriendo la aplicación de Obsidian y buscando la nueva nota generada por LIA.
-4. En otra sesión, preguntarle: *"LIA, ¿recuerdas cuál me dijiste que era la contraseña del router?"*. Verificar que LIA realiza una búsqueda en Obsidian antes de responder con el dato exacto.
+2. Hacer una pregunta de memoria: *"¿Te acuerdas de mis amigos del gimnasio?"*
+   - **Comportamiento esperado**: LIA responderá algo como: *"Sí, claro, Juanjo y Pablo, que viven en Gérica"* en lugar de *"Sí, he buscado en tu nota 'Amigos del Gimnasio' y he visto que Juanjo y Pablo viven en Gérica"*.
+3. Pedir a LIA que cree una nota: *"Guarda que mañana tengo cita médica a las 10:00"*.
+   - **Comportamiento esperado**: LIA guardará la nota en segundo plano y responderá: *"Perfecto, ya lo he anotado en tu agenda para que no se te pase"* en lugar de *"He guardado 'Cita Médica' en tu vault de Obsidian con la etiqueta #salud"*.

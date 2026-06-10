@@ -46,9 +46,27 @@ class Orchestrator(QObject):
         self.audio_recorder.recording_stopped.connect(self.on_recording_stopped)
         self.audio_recorder.error_occurred.connect(self.on_audio_error)
 
+    def show_welcome_greeting(self):
+        """Muestra un saludo proactivo e inspirador en el display si está vacío, incitando a registrar ideas o tareas."""
+        if not self.view.output_display.toPlainText().strip():
+            import random
+            greetings = [
+                "¡Hola Hugo! ¿Qué idea se te ha ocurrido hoy? 💡",
+                "Hola Hugo, ¿en qué tarea o proyecto profesional vamos a trabajar hoy? 🚀",
+                "¡Buenas! Cuéntame, ¿qué hay de nuevo hoy en tus notas o estudios? 🧠",
+                "Hola Hugo, ¿tienes alguna idea o nota profesional para enlazar hoy? ✨",
+                "¡Hola! ¿Qué se te pasa por la cabeza hoy? Estoy lista para anotarlo todo. 📝"
+            ]
+            greeting = random.choice(greetings)
+            self.view.output_display.setHtml(
+                f"<span style='color: #A78BFA; font-weight: bold;'>LIA:</span> "
+                f"<span style='color: #F1F5F9;'>{greeting}</span>"
+            )
+
     def start(self):
-        """Starts the background listening thread."""
+        """Starts the background listening thread and displays startup greeting."""
         self.keyboard_listener.start()
+        self.show_welcome_greeting()
         print("[Orchestrator] Sistema de LIA Assistant iniciado.")
         print("[Orchestrator] Presione 'Shift_L + L' globalmente para mostrar/ocultar el panel.")
 
@@ -64,6 +82,7 @@ class Orchestrator(QObject):
             self.view.activateWindow()
             self.view.input_field.setFocus()
             self.state_manager.set_state(AssistantState.LISTENING)
+            self.show_welcome_greeting()
             print("[Orchestrator] Panel activado. Estado: LISTENING")
 
     def on_state_changed(self, state: AssistantState):
@@ -85,14 +104,13 @@ class Orchestrator(QObject):
 
     def detect_reasoning_intent(self, text: str) -> bool:
         """
-        Analiza si el texto ingresado por el usuario es una pregunta o una petición
-        conversacional de consejo, recomendación o toma de decisiones complejas,
-        las cuales requieren el modelo Pro de razonamiento en lugar del Flash de acción.
+        Analiza si el texto ingresado por el usuario requiere el modelo Pro de razonamiento profundo
+        (petición explícita de análisis a fondo, mentoría, consejo o decisión compleja),
+        de lo contrario se usa el modelo Flash por velocidad y ahorro de tokens.
         """
         keywords = [
-            "?", "¿", "recomienda", "aconseja", "hago", "decisión", "opinión", 
-            "piensas", "analiza", "gestionar", "situación", "duda", "rutina", 
-            "plan", "crear plan", "por qué", "cómo", "dónde", "quién", "cuál"
+            "analiza a fondo", "analiza en profundidad", "razonamiento profundo",
+            "razona", "consejo complejo", "decisión compleja", "mentoría", "reflexiona sobre"
         ]
         text_lower = text.lower()
         return any(kw in text_lower for kw in keywords)

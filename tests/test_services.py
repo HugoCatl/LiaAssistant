@@ -117,12 +117,14 @@ def test_orchestrator_intent_routing():
         orch = Orchestrator(mock_view, mock_state, mock_kbd)
     
     # Assert reasoning keywords route to reasoning agent
-    assert orch.detect_reasoning_intent("¿Qué me aconsejas hacer en mi trabajo?") is True
-    assert orch.detect_reasoning_intent("Hazme una rutina de gimnasio por favor") is True
-    assert orch.detect_reasoning_intent("cuál es el estado de mi perfil") is True
+    assert orch.detect_reasoning_intent("analiza a fondo mi situación laboral") is True
+    assert orch.detect_reasoning_intent("necesito tu mentoría en este tema") is True
+    assert orch.detect_reasoning_intent("reflexiona sobre la decisión compleja que debo tomar") is True
     
     # Assert action prompts route to action worker
     assert orch.detect_reasoning_intent("abre el paint 3d") is False
     assert orch.detect_reasoning_intent("guarda la nota Tareas") is False
+    assert orch.detect_reasoning_intent("¿cuál es el estado de mi perfil?") is False
+    assert orch.detect_reasoning_intent("hazme una rutina de gimnasio") is False
 
 
