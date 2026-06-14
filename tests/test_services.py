@@ -4,6 +4,7 @@ import pytest
 
 from src.services.os_automation import open_application
 from src.services.gemini_service import GeminiWorker, GeminiReasoningWorker
+from src.services.tts_service import TTSService
 from src.core.orchestrator import Orchestrator
 
 def test_os_automation_win32_mappings():
@@ -126,5 +127,26 @@ def test_orchestrator_intent_routing():
     assert orch.detect_reasoning_intent("guarda la nota Tareas") is False
     assert orch.detect_reasoning_intent("¿cuál es el estado de mi perfil?") is False
     assert orch.detect_reasoning_intent("hazme una rutina de gimnasio") is False
+
+
+def test_tts_sanitization():
+    """Verifies that markdown, HTML, Obsidian links, code blocks and system tags are correctly cleaned."""
+    text_with_markdown = "Hola **Hugo**, esto es *importante* y _italica_."
+    assert TTSService.sanitize_text_for_speech(text_with_markdown) == "Hola Hugo, esto es importante y italica."
+
+    text_with_code = "Mira este codigo: ```python\nprint('hello')\n``` y `x = 5`."
+    assert TTSService.sanitize_text_for_speech(text_with_code) == "Mira este codigo: y ."
+
+    text_with_html = "Hola <br/> Hugo <span>Catalan</span>"
+    assert TTSService.sanitize_text_for_speech(text_with_html) == "Hola Hugo Catalan"
+
+    text_with_links = "Revisa la nota [[Hugo Catalan]] y la de [[Tareas]]"
+    assert TTSService.sanitize_text_for_speech(text_with_links) == "Revisa la nota Hugo Catalan y la de Tareas"
+
+    text_with_lists = "# Titulo Principal\n- Primera idea\n* Segunda idea"
+    assert TTSService.sanitize_text_for_speech(text_with_lists) == "Titulo Principal. Primera idea. Segunda idea"
+
+    text_with_system = "[Tokens usados - Entrada: 50 | Salida: 20 | Total: 70]\n[Ejecutando comando: open_application]\n[Sistema: Notepad iniciado]\nTodo listo."
+    assert TTSService.sanitize_text_for_speech(text_with_system) == "Todo listo."
 
 

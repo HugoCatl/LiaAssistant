@@ -1,12 +1,14 @@
 import os
 import sounddevice as sd
-from PyQt6.QtCore import QObject
+from PyQt6.QtCore import QObject, QUrl
+from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from src.core.state_manager import StateManager, AssistantState
 from src.gui.view import View
 from src.services.gemini_service import GeminiWorker, GeminiReasoningWorker
 from src.services.os_automation import open_application
 from src.io.audio_recorder import AudioRecorder
 from src.services.whisper_local import TranscriptionWorker
+from src.services.tts_service import TTSService
 
 class Orchestrator(QObject):
     """
@@ -20,6 +22,15 @@ class Orchestrator(QObject):
         self.state_manager = state_manager
         self.keyboard_listener = keyboard_listener
         self.worker = None
+        self.current_response_text = ""
+
+        # Setup QMediaPlayer for TTS responses
+        self.player = QMediaPlayer()
+        self.audio_output = QAudioOutput()
+        self.player.setAudioOutput(self.audio_output)
+
+        # Connect speech ready signal to playback handler
+        TTSService.get_instance().speech_ready.connect(self.play_speech_audio)
 
         # Hardware Perception components
         self.audio_recorder = AudioRecorder()
@@ -117,6 +128,11 @@ class Orchestrator(QObject):
 
     def handle_input_submission(self):
         """Handles user text submission and spawns the background Gemini worker."""
+        # Stop any ongoing speech before starting a new transaction
+        self.player.stop()
+        TTSService.get_instance().stop()
+        self.current_response_text = ""
+
         # Prevent starting a new request if one is already running
         if self.worker and self.worker.isRunning():
             print("[Orchestrator] Advertencia: Ya hay una consulta en proceso.")
@@ -160,6 +176,8 @@ class Orchestrator(QObject):
         """Streams text tokens inline directly into the output display."""
         if self.state_manager.state == AssistantState.PROCESSING:
             self.state_manager.set_state(AssistantState.RESPONDING)
+
+        self.current_response_text += token
 
         # Move text cursor to end and insert token inline (produces character-by-character animation)
         cursor = self.view.output_display.textCursor()
@@ -226,6 +244,11 @@ class Orchestrator(QObject):
     def on_generation_finished(self):
         """Restores the UI state to idle when the generation ends."""
         self.state_manager.set_state(AssistantState.IDLE)
+
+        # Trigger text to speech on the generated text
+        if self.current_response_text:
+            TTSService.get_instance().speak(self.current_response_text)
+
         # Safely mark QThread for garbage collection
         if self.worker:
             self.worker.deleteLater()
@@ -249,6 +272,8 @@ class Orchestrator(QObject):
 
     def on_recording_started(self):
         """Handles visual UI feedback when microphone recording starts."""
+        self.player.stop()
+        TTSService.get_instance().stop()
         self.state_manager.set_state(AssistantState.LISTENING)
         self.view.set_recording_active(True)
         print("[Orchestrator] Capturando audio desde micrófono...")
@@ -322,10 +347,32 @@ class Orchestrator(QObject):
                         seen_names.add(name)
                         input_devices.append((idx, name))
 
+            # Retrieve active status of TTS
+            tts_enabled = TTSService.get_instance().enabled
+
             # Display the selection dropdown in the view
-            self.view.show_microphone_menu(input_devices, self.active_mic_id, self.select_microphone)
+            self.view.show_config_menu(
+                input_devices,
+                self.active_mic_id,
+                tts_enabled,
+                self.toggle_tts,
+                self.select_microphone
+            )
         except Exception as e:
             print(f"[Orchestrator] Error al listar los micrófonos del sistema: {e}")
+
+    def toggle_tts(self):
+        """Toggles the active state of TTS service and logs status on UI."""
+        service = TTSService.get_instance()
+        new_state = not service.enabled
+        service.set_enabled(new_state)
+
+        status_msg = "activada" if new_state else "desactivada"
+        cursor = self.view.output_display.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        cursor.insertHtml(f"<br/><span style='color: #C084FC;'><i>[Sistema: Respuesta por voz {status_msg}]</i></span><br/>")
+        self.view.output_display.ensureCursorVisible()
+        print(f"[Orchestrator] Respuesta por voz (TTS) cambiada a: {new_state}")
 
     def select_microphone(self, device_id):
         """Updates active microphone configuration index and logs status on UI."""
@@ -342,3 +389,9 @@ class Orchestrator(QObject):
         cursor.insertHtml(f"<br/><span style='color: #C084FC;'><i>[Sistema: Micrófono activo cambiado a '{name}']</i></span><br/>")
         self.view.output_display.ensureCursorVisible()
         print(f"[Orchestrator] Micrófono de entrada cambiado a ID {device_id} ({name})")
+
+    def play_speech_audio(self, path: str):
+        """Plays the generated speech MP3 file using QMediaPlayer."""
+        if os.path.exists(path):
+            self.player.setSource(QUrl.fromLocalFile(path))
+            self.player.play()

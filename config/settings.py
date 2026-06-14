@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     # STT Model path or model size
     whisper_model_path: str = Field("base", validation_alias="WHISPER_MODEL_PATH")
 
+    # TTS configuration
+    tts_enabled: bool = Field(True, validation_alias="TTS_ENABLED")
+    tts_voice: str = Field("es-ES-ElviraNeural", validation_alias="TTS_VOICE")
+
     # General configuration
     debug: bool = Field(False, validation_alias="DEBUG")
 

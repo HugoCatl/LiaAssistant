@@ -9,6 +9,7 @@ from config import settings
 from src.core import StateManager, Orchestrator
 from src.gui import View
 from src.io import KeyboardListener
+from src.services.tts_service import TTSService
 
 def main():
     print("[Main] Initializing LIA Assistant base environment...")
@@ -30,6 +31,7 @@ def main():
 
     # Ensure background listener resources are released on exit
     app.aboutToQuit.connect(keyboard_listener.stop)
+    app.aboutToQuit.connect(lambda: TTSService.get_instance().stop())
 
     # Start the orchestrator (launches KeyboardListener thread)
     orchestrator.start()

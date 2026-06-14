@@ -8,3 +8,4 @@ google-genai>=2.8.0
 sounddevice>=0.4.6
 numpy>=1.20.0
 faster-whisper>=1.0.0
+pyttsx3>=2.90

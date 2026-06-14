@@ -378,10 +378,10 @@ class View(QWidget):
                 }
             """)
 
-    def show_microphone_menu(self, devices: list, current_device_id, callback):
+    def show_config_menu(self, devices: list, current_device_id, tts_enabled: bool, tts_callback, mic_callback):
         """
         Dynamically generates and displays a context menu containing
-        a list of available audio input devices.
+        a toggle for TTS and a list of available audio input devices.
         """
         menu = QMenu(self)
         menu.setStyleSheet("""
@@ -403,15 +403,25 @@ class View(QWidget):
                 background-color: rgba(192, 132, 252, 0.25);
                 color: #FFFFFF;
             }
+            QMenu::separator {
+                height: 1px;
+                background: rgba(192, 132, 252, 0.2);
+                margin: 4px 8px;
+            }
         """)
+
+        # Add TTS option
+        tts_label = f"✓ Voz Activa (TTS)" if tts_enabled else "Voz Activa (TTS)"
+        tts_action = menu.addAction(tts_label)
+        tts_action.triggered.connect(tts_callback)
+
+        menu.addSeparator()
 
         # Add an action for each device
         for dev_id, dev_name in devices:
-            # Put a checkmark in front of the active device
             display_name = f"✓ {dev_name}" if dev_id == current_device_id else dev_name
             action = menu.addAction(display_name)
-            # Route trigger to callback
-            action.triggered.connect(lambda checked, d_id=dev_id: callback(d_id))
+            action.triggered.connect(lambda checked, d_id=dev_id: mic_callback(d_id))
 
         # Position menu right below the gear button
         pos = self.config_button.mapToGlobal(QPoint(0, self.config_button.height()))
