@@ -150,3 +150,57 @@ def test_tts_sanitization():
     assert TTSService.sanitize_text_for_speech(text_with_system) == "Todo listo."
 
 
+@patch("pyperclip.paste")
+@patch("pyperclip.copy")
+def test_clipboard_automation(mock_copy, mock_paste):
+    """Verifies that get_clipboard_content and set_clipboard_content interact with pyperclip correctly."""
+    from src.services.os_automation import get_clipboard_content, set_clipboard_content
+    
+    # Test get_clipboard_content with text
+    mock_paste.return_value = "Hola LIA"
+    assert get_clipboard_content() == "Hola LIA"
+    mock_paste.assert_called_once()
+    
+    # Test get_clipboard_content empty/whitespace
+    mock_paste.reset_mock()
+    mock_paste.return_value = "   "
+    assert "vacío o no contiene texto legible" in get_clipboard_content()
+    mock_paste.assert_called_once()
+    
+    # Test set_clipboard_content
+    result = set_clipboard_content("Prueba LIA")
+    assert "Texto copiado al portapapeles correctamente" in result
+    mock_copy.assert_called_once_with("Prueba LIA")
+
+
+@patch("google.genai.Client")
+@patch("os.path.exists", return_value=True)
+@patch("builtins.open")
+def test_gemini_worker_multimodal(mock_open, mock_exists, mock_client_class):
+    """Verifies that GeminiWorker appends the screenshot bytes when an image path is supplied."""
+    # Mock file read for image bytes
+    mock_file = MagicMock()
+    mock_file.read.return_value = b"fake_png_data"
+    mock_open.return_value.__enter__.return_value = mock_file
+    
+    mock_client = MagicMock()
+    mock_client_class.return_value = mock_client
+    mock_client.models.generate_content_stream.return_value = []
+    
+    worker = GeminiWorker("mira mi pantalla", image_path="fake_screenshot.png")
+    worker.api_key = "mock_key"
+    worker.run()
+    
+    # Verify generate_content_stream call contents contains Part with image bytes
+    args, kwargs = mock_client.models.generate_content_stream.call_args
+    contents = kwargs.get("contents")
+    assert contents is not None
+    user_content = contents[0]
+    parts = user_content.parts
+    assert len(parts) == 2
+    assert parts[0].text == "mira mi pantalla"
+    assert parts[1].inline_data.data == b"fake_png_data"
+    assert parts[1].inline_data.mime_type == "image/png"
+
+
+

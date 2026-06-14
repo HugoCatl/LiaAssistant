@@ -1,5 +1,6 @@
 import os
 import subprocess
+import pyperclip
 
 def open_application(app_name: str) -> str:
     """
@@ -87,3 +88,34 @@ def open_application(app_name: str) -> str:
         return f"Error: No se pudo encontrar el archivo ejecutable para '{app_name}'."
     except Exception as e:
         return f"Error al abrir '{app_name}': {str(e)}"
+
+def get_clipboard_content() -> str:
+    """
+    Obtiene el contenido actual de texto del portapapeles del sistema (Ctrl+C).
+    
+    Returns:
+        El texto copiado en el portapapeles, o un mensaje de error si está vacío.
+    """
+    try:
+        text = pyperclip.paste()
+        if not text or not text.strip():
+            return "El portapapeles de texto está vacío o no contiene texto legible."
+        return text
+    except Exception as e:
+        return f"Error al leer el portapapeles: {str(e)}"
+
+def set_clipboard_content(text: str) -> str:
+    """
+    Copia un bloque de texto dado al portapapeles del sistema para poder pegarlo (Ctrl+V) en cualquier parte.
+    
+    Args:
+        text: El texto que se desea copiar al portapapeles.
+        
+    Returns:
+        Un mensaje confirmando que el texto fue copiado con éxito.
+    """
+    try:
+        pyperclip.copy(text)
+        return "Texto copiado al portapapeles correctamente."
+    except Exception as e:
+        return f"Error al escribir en el portapapeles: {str(e)}"

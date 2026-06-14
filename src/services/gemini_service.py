@@ -2,7 +2,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from google import genai
 from google.genai import types
 from config import settings
-from src.services.os_automation import open_application
+from src.services.os_automation import open_application, get_clipboard_content, set_clipboard_content
 from src.storage.obsidian_manager import create_note, read_note, search_notes, write_note, append_to_note
 
 # Map tool names to python functions for execution inside workers
@@ -12,7 +12,9 @@ TOOL_MAP = {
     "read_note": read_note,
     "search_notes": search_notes,
     "write_note": write_note,
-    "append_to_note": append_to_note
+    "append_to_note": append_to_note,
+    "get_clipboard_content": get_clipboard_content,
+    "set_clipboard_content": set_clipboard_content
 }
 
 class GeminiWorker(QThread):
@@ -26,9 +28,10 @@ class GeminiWorker(QThread):
     tokens_consumed = pyqtSignal(int, int, int)
     error_occurred = pyqtSignal(str)
 
-    def __init__(self, prompt: str):
+    def __init__(self, prompt: str, image_path: str = None):
         super().__init__()
         self.prompt = prompt
+        self.image_path = image_path
         self.api_key = settings.gemini_api_key
         self.model_name = settings.gemini_model
 
@@ -39,7 +42,10 @@ class GeminiWorker(QThread):
 
         try:
             client = genai.Client(api_key=self.api_key)
-            tools_list = [open_application, create_note, read_note, search_notes, write_note, append_to_note]
+            tools_list = [
+                open_application, create_note, read_note, search_notes, write_note, append_to_note,
+                get_clipboard_content, set_clipboard_content
+            ]
             
             system_instruction = (
                 "Eres LIA, asistente virtual para Hugo Catalán (20 años, perfil: `Hugo Catalán`).\n"
@@ -49,6 +55,7 @@ class GeminiWorker(QThread):
                 "Antes de guardar, busca notas con `search_notes`. Si existen, actualízalas con `write_note` o `append_to_note` para no duplicar.\n"
                 "En el contenido de los archivos creados/editados (NUNCA en tu respuesta), debes enlazar obligatoriamente al perfil usando la sintaxis `[[Hugo Catalán]]` y, a su vez, enlazar desde la nota de perfil `Hugo Catalán` a la nueva nota temática usando `[[Nombre Nota]]` (enlace bidireccional obligatorio con corchetes dobles).\n"
                 "Genera etiquetas (tags) lógicas sin '#' al crear/editar notas (ej: profesional, tareas, ia, estudios).\n"
+                "Tienes acceso al portapapeles con `get_clipboard_content` y `set_clipboard_content`. Úsalos cuando te pidan leer/guardar info copiada o guardar resúmenes en el portapapeles.\n"
                 "Si te piden abrir una aplicación, invoca 'open_application'.\n"
                 "Al finalizar, da una confirmación natural y humana de una sola línea."
             )
@@ -59,7 +66,17 @@ class GeminiWorker(QThread):
                 system_instruction=system_instruction
             )
 
-            contents = [types.Content(role="user", parts=[types.Part.from_text(text=self.prompt)])]
+            import os
+            parts = [types.Part.from_text(text=self.prompt)]
+            if self.image_path and os.path.exists(self.image_path):
+                try:
+                    with open(self.image_path, "rb") as f:
+                        img_bytes = f.read()
+                    parts.append(types.Part.from_bytes(data=img_bytes, mime_type="image/png"))
+                    print(f"[GeminiWorker] Contexto visual (imagen {self.image_path}) adjuntado correctamente.")
+                except Exception as e:
+                    print(f"[GeminiWorker] Error al cargar la imagen: {e}")
+            contents = [types.Content(role="user", parts=parts)]
 
             total_prompt_tokens = 0
             total_candidate_tokens = 0
@@ -138,9 +155,10 @@ class GeminiReasoningWorker(QThread):
     tokens_consumed = pyqtSignal(int, int, int)
     error_occurred = pyqtSignal(str)
 
-    def __init__(self, prompt: str):
+    def __init__(self, prompt: str, image_path: str = None):
         super().__init__()
         self.prompt = prompt
+        self.image_path = image_path
         self.api_key = settings.gemini_api_key
         self.model_name = settings.gemini_model_reasoning
 
@@ -151,7 +169,10 @@ class GeminiReasoningWorker(QThread):
 
         try:
             client = genai.Client(api_key=self.api_key)
-            tools_list = [open_application, create_note, read_note, search_notes, write_note, append_to_note]
+            tools_list = [
+                open_application, create_note, read_note, search_notes, write_note, append_to_note,
+                get_clipboard_content, set_clipboard_content
+            ]
             
             system_instruction = (
                 "Eres LIA, asistente virtual y mentor personal de Hugo Catalán (20 años, perfil: `Hugo Catalán`).\n"
@@ -161,6 +182,7 @@ class GeminiReasoningWorker(QThread):
                 "Antes de guardar, busca notas con `search_notes`. Si existen, actualízalas con `write_note` o `append_to_note` para evitar duplicados.\n"
                 "En el contenido de los archivos creados/editados (NUNCA en tu respuesta), debes enlazar obligatoriamente al perfil usando la sintaxis `[[Hugo Catalán]]` y, a su vez, enlazar desde la nota de perfil `Hugo Catalán` a la nueva nota temática usando `[[Nombre Nota]]` (enlace bidireccional obligatorio con corchetes dobles).\n"
                 "Genera etiquetas (tags) lógicas sin '#' al crear/editar notas (ej: profesional, tareas, ia, estudios).\n"
+                "Tienes acceso al portapapeles con `get_clipboard_content` y `set_clipboard_content`. Úsalos cuando sea relevante para capturar o guardar información.\n"
                 "Si diseñas rutinas/planes/proyectos, guárdalos con `write_note` y enlázalos a `[[Hugo Catalán]]` de forma invisible. Confírmalo en lenguaje cotidiano y cercano."
             )
 
@@ -170,7 +192,17 @@ class GeminiReasoningWorker(QThread):
                 system_instruction=system_instruction
             )
 
-            contents = [types.Content(role="user", parts=[types.Part.from_text(text=self.prompt)])]
+            import os
+            parts = [types.Part.from_text(text=self.prompt)]
+            if self.image_path and os.path.exists(self.image_path):
+                try:
+                    with open(self.image_path, "rb") as f:
+                        img_bytes = f.read()
+                    parts.append(types.Part.from_bytes(data=img_bytes, mime_type="image/png"))
+                    print(f"[GeminiReasoningWorker] Contexto visual (imagen {self.image_path}) adjuntado correctamente.")
+                except Exception as e:
+                    print(f"[GeminiReasoningWorker] Error al cargar la imagen: {e}")
+            contents = [types.Content(role="user", parts=parts)]
 
             total_prompt_tokens = 0
             total_candidate_tokens = 0

@@ -126,6 +126,17 @@ class Orchestrator(QObject):
         text_lower = text.lower()
         return any(kw in text_lower for kw in keywords)
 
+    def detect_vision_intent(self, text: str) -> bool:
+        """
+        Analiza si el texto ingresado requiere captura de pantalla como contexto visual.
+        """
+        keywords = [
+            "pantalla", "pantallazo", "error", "consola", "mira", "ve", "captura",
+            "visualiza", "abierto", "abierta", "codigo", "código", "portada", "interfaz"
+        ]
+        text_lower = text.lower()
+        return any(kw in text_lower for kw in keywords)
+
     def handle_input_submission(self):
         """Handles user text submission and spawns the background Gemini worker."""
         # Stop any ongoing speech before starting a new transaction
@@ -153,13 +164,32 @@ class Orchestrator(QObject):
         # Set UI state to processing
         self.state_manager.set_state(AssistantState.PROCESSING)
 
+        # Capturar pantalla si el usuario tiene intención visual
+        screenshot_path = None
+        if self.detect_vision_intent(user_text):
+            try:
+                from PIL import ImageGrab
+                screenshot_path = "temp_screenshot.png"
+                screenshot = ImageGrab.grab()
+                screenshot.save(screenshot_path, "PNG")
+                print(f"[Orchestrator] Capturando pantalla para contexto visual: {screenshot_path}")
+                
+                # Mostrar feedback en el output display
+                cursor = self.view.output_display.textCursor()
+                cursor.movePosition(cursor.MoveOperation.End)
+                cursor.insertHtml("<br/><span style='color: #A78BFA;'><i>[LIA: Capturando pantalla para contexto visual...]</i></span><br/>")
+                self.view.output_display.ensureCursorVisible()
+            except Exception as e:
+                print(f"[Orchestrator] Error al capturar pantalla: {e}")
+                screenshot_path = None
+
         # Enrutar inteligentemente según la intención
         if self.detect_reasoning_intent(user_text):
             print(f"[Orchestrator] Enrutando '{user_text}' al Agente de Razonamiento (Gemini Pro)...")
-            self.worker = GeminiReasoningWorker(user_text)
+            self.worker = GeminiReasoningWorker(user_text, image_path=screenshot_path)
         else:
             print(f"[Orchestrator] Enrutando '{user_text}' al Agente de Acción Rápida (Gemini Flash)...")
-            self.worker = GeminiWorker(user_text)
+            self.worker = GeminiWorker(user_text, image_path=screenshot_path)
         
         # Connect signals
         self.worker.token_received.connect(self.on_token_received)
@@ -253,6 +283,13 @@ class Orchestrator(QObject):
         if self.worker:
             self.worker.deleteLater()
             self.worker = None
+
+        # Clean up screenshot if it exists
+        if os.path.exists("temp_screenshot.png"):
+            try:
+                os.remove("temp_screenshot.png")
+            except Exception as e:
+                print(f"[Orchestrator] Error al eliminar temp_screenshot.png: {e}")
 
     # --- Hardware Audio & STT Handlers ---
 
