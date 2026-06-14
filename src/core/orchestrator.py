@@ -50,6 +50,7 @@ class Orchestrator(QObject):
 
         # Wire settings config wheel and microphone recording buttons
         self.view.config_button.clicked.connect(self.show_config_menu)
+        self.view.info_button.clicked.connect(self.show_info_menu)
         self.view.mic_button.clicked.connect(self.toggle_recording)
 
         # Wire audio recorder signals
@@ -73,6 +74,63 @@ class Orchestrator(QObject):
                 f"<span style='color: #A78BFA; font-weight: bold;'>LIA:</span> "
                 f"<span style='color: #F1F5F9;'>{greeting}</span>"
             )
+
+    def show_info_menu(self):
+        """Muestra un menú desplegable con guías rápidas y ejemplos interactivos que autocompletan el input."""
+        from PyQt6.QtWidgets import QMenu
+        from PyQt6.QtCore import QPoint
+        
+        menu = QMenu(self.view)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: rgba(22, 16, 28, 0.96);
+                border: 1px solid rgba(192, 132, 252, 0.4);
+                border-radius: 8px;
+                color: #E2E8F0;
+                padding: 4px;
+                font-family: 'Segoe UI', 'Outfit', sans-serif;
+                font-size: 11px;
+            }
+            QMenu::item {
+                padding: 6px 14px;
+                background-color: transparent;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background-color: rgba(192, 132, 252, 0.25);
+                color: #FFFFFF;
+            }
+            QMenu::separator {
+                height: 1px;
+                background: rgba(192, 132, 252, 0.2);
+                margin: 4px 8px;
+            }
+        """)
+
+        # Visión de pantalla
+        vision_action = menu.addAction("📸 Ver Pantalla: \"Mira mi pantalla y resume...\"")
+        vision_action.triggered.connect(lambda: self.view.input_field.setText("Mira mi pantalla y resume lo que ves."))
+
+        # Portapapeles
+        clip_action = menu.addAction("📋 Portapapeles: \"Crea una nota con mi portapapeles\"")
+        clip_action.triggered.connect(lambda: self.view.input_field.setText("Crea una nota con lo que tengo en mi portapapeles."))
+
+        # Cerebro
+        brain_action = menu.addAction("🧠 Segundo Cerebro: \"Busca en mis notas...\"")
+        brain_action.triggered.connect(lambda: self.view.input_field.setText("Busca en mis notas sobre "))
+
+        # Separator
+        menu.addSeparator()
+
+        # Help info item (non-clickable info)
+        help_item = menu.addAction("🎙️ Micro: haz clic para hablar | Atajo: Shift_L + L")
+        help_item.setEnabled(False)
+
+        # Position menu right below the info button
+        pos = self.view.info_button.mapToGlobal(QPoint(0, self.view.info_button.height()))
+        menu.exec(pos)
+
+
 
     def start(self):
         """Starts the background listening thread and displays startup greeting."""

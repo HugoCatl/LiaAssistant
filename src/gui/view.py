@@ -116,6 +116,22 @@ def create_vector_icon(icon_type: str, color_hex: str, size: int = 32) -> QIcon:
         painter.drawPath(path)
         painter.restore()
         
+    elif icon_type == "info":
+        painter.save()
+        painter.translate(size / 2.0, size / 2.0)
+        # Circle outline
+        pen.setWidthF(1.8)
+        r = size * 0.35
+        painter.drawEllipse(QPointF(0.0, 0.0), r, r)
+        # Dot of 'i'
+        painter.setBrush(QBrush(color))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawEllipse(QPointF(0.0, -size * 0.12), size * 0.05, size * 0.05)
+        # Stem of 'i'
+        painter.setPen(pen)
+        painter.drawLine(QPointF(0.0, -size * 0.02), QPointF(0.0, size * 0.18))
+        painter.restore()
+        
     painter.end()
     return QIcon(pixmap)
 
@@ -243,6 +259,25 @@ class View(QWidget):
         self.status_dot.setFixedSize(10, 10)
         self.update_status_dot(AssistantState.IDLE)
         header_layout.addWidget(self.status_dot)
+
+        # Info Button (Manual info vector icon)
+        self.info_button = IconButton("info", "rgba(255, 255, 255, 0.45)", "#C084FC", 16, self.card)
+        self.info_button.setFixedSize(24, 24)
+        self.info_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.info_button.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: none;
+                border-radius: 12px;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.08);
+            }
+            QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.15);
+            }
+        """)
+        header_layout.addWidget(self.info_button)
 
         # Settings/Microphone Config Button (Gear vector icon)
         self.config_button = IconButton("settings", "rgba(255, 255, 255, 0.45)", "#C084FC", 16, self.card)
