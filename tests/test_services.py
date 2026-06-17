@@ -131,17 +131,17 @@ def test_orchestrator_intent_routing():
 
 def test_tts_sanitization():
     """Verifies that markdown, HTML, Obsidian links, code blocks and system tags are correctly cleaned."""
-    text_with_markdown = "Hola **Hugo**, esto es *importante* y _italica_."
-    assert TTSService.sanitize_text_for_speech(text_with_markdown) == "Hola Hugo, esto es importante y italica."
+    text_with_markdown = "Hola **Usuario**, esto es *importante* y _italica_."
+    assert TTSService.sanitize_text_for_speech(text_with_markdown) == "Hola Usuario, esto es importante y italica."
 
     text_with_code = "Mira este codigo: ```python\nprint('hello')\n``` y `x = 5`."
     assert TTSService.sanitize_text_for_speech(text_with_code) == "Mira este codigo: y ."
 
-    text_with_html = "Hola <br/> Hugo <span>Catalan</span>"
-    assert TTSService.sanitize_text_for_speech(text_with_html) == "Hola Hugo Catalan"
+    text_with_html = "Hola <br/> Nombre <span>Usuario</span>"
+    assert TTSService.sanitize_text_for_speech(text_with_html) == "Hola Nombre Usuario"
 
-    text_with_links = "Revisa la nota [[Hugo Catalan]] y la de [[Tareas]]"
-    assert TTSService.sanitize_text_for_speech(text_with_links) == "Revisa la nota Hugo Catalan y la de Tareas"
+    text_with_links = "Revisa la nota [[Nombre Usuario]] y la de [[Tareas]]"
+    assert TTSService.sanitize_text_for_speech(text_with_links) == "Revisa la nota Nombre Usuario y la de Tareas"
 
     text_with_lists = "# Titulo Principal\n- Primera idea\n* Segunda idea"
     assert TTSService.sanitize_text_for_speech(text_with_lists) == "Titulo Principal. Primera idea. Segunda idea"

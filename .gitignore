@@ -34,3 +34,9 @@ htmlcov/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Temporary and generated runtime files
+temp_*
+*.mp3
+*.wav
+*.png

@@ -6,7 +6,7 @@ LIA es un asistente virtual de escritorio nativo de Windows, de alto rendimiento
 
 ## 💡 Propósito Principal
 
-El núcleo de LIA es la **construcción automatizada de tu gráfico de conocimiento**. Cada vez que registras una tarea, proyecto de IA, tema de estudio, hobby, nota de amigos o credenciales, LIA analiza la información, crea o actualiza las notas correspondientes en Obsidian y las **vincula bidireccionalmente** mediante corchetes dobles (`[[Nota]]`) al perfil principal (`[[Hugo Catalán]]`). Con el tiempo, tu gráfico de relaciones en Obsidian se dibuja solo, permitiéndote navegar visualmente por tus pensamientos y proyectos sin esfuerzo de organización manual.
+El núcleo de LIA es la **construcción automatizada de tu gráfico de conocimiento**. Cada vez que registras una tarea, proyecto de IA, tema de estudio, hobby, nota de amigos o credenciales, LIA analiza la información, crea o actualiza las notas correspondientes en Obsidian y las **vincula bidireccionalmente** mediante corchetes dobles (`[[Nota]]`) al perfil principal (por ejemplo, `[[TuNombre]]`). Con el tiempo, tu gráfico de relaciones en Obsidian se dibuja solo, permitiéndote navegar visualmente por tus pensamientos y proyectos sin esfuerzo de organización manual.
 
 ---
 
@@ -67,7 +67,7 @@ LiaAssistant/
 ## ✨ Funcionalidades Clave
 
 1. **Interfaz Glassmorphic Fluida**: Ventana translúcida elegante sin bordes, con efectos de desenfoque y sombras de color purpura que se superpone a cualquier app.
-2. **Interacción Proactiva**: LIA te recibe dinámicamente con saludos motivadores cada vez que inicias o abres el panel (ej. *"¡Hola Hugo! ¿Qué idea se te ha ocurrido hoy? 💡"*), incitándote a registrar tus pensamientos.
+2. **Interacción Proactiva**: LIA te recibe dinámicamente con saludos motivadores cada vez que inicias o abres el panel (ej. *"¡Hola Usuario! ¿Qué idea se te ha ocurrido hoy? 💡"*), incitándote a registrar tus pensamientos.
 3. **Captura por Voz Multimodal**: Micrófono integrado y transcripción local asíncrona mediante **Whisper** para registrar notas simplemente hablando.
 4. **Vinculación Bidireccional Inteligente**: Auto-conexión de notas mediante sintaxis de doble corchete `[[Nota]]` para que el mapa relacional de Obsidian se autoorganice en segundo plano.
 5. **Enrutamiento y Ahorro de Tokens**:

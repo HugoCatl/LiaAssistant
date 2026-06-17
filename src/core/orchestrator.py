@@ -63,10 +63,10 @@ class Orchestrator(QObject):
         if not self.view.output_display.toPlainText().strip():
             import random
             greetings = [
-                "¡Hola Hugo! ¿Qué idea se te ha ocurrido hoy? 💡",
-                "Hola Hugo, ¿en qué tarea o proyecto profesional vamos a trabajar hoy? 🚀",
+                f"¡Hola {settings.user_name}! ¿Qué idea se te ha ocurrido hoy? 💡",
+                f"Hola {settings.user_name}, ¿en qué tarea o proyecto profesional vamos a trabajar hoy? 🚀",
                 "¡Buenas! Cuéntame, ¿qué hay de nuevo hoy en tus notas o estudios? 🧠",
-                "Hola Hugo, ¿tienes alguna idea o nota profesional para enlazar hoy? ✨",
+                f"Hola {settings.user_name}, ¿tienes alguna idea o nota profesional para enlazar hoy? ✨",
                 "¡Hola! ¿Qué se te pasa por la cabeza hoy? Estoy lista para anotarlo todo. 📝"
             ]
             greeting = random.choice(greetings)
