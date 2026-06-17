@@ -2,6 +2,7 @@ import os
 import sounddevice as sd
 from PyQt6.QtCore import QObject, QUrl
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
+from config import settings
 from src.core.state_manager import StateManager, AssistantState
 from src.gui.view import View
 from src.services.gemini_service import GeminiWorker, GeminiReasoningWorker
@@ -231,12 +232,6 @@ class Orchestrator(QObject):
                 screenshot = ImageGrab.grab()
                 screenshot.save(screenshot_path, "PNG")
                 print(f"[Orchestrator] Capturando pantalla para contexto visual: {screenshot_path}")
-                
-                # Mostrar feedback en el output display
-                cursor = self.view.output_display.textCursor()
-                cursor.movePosition(cursor.MoveOperation.End)
-                cursor.insertHtml("<br/><span style='color: #A78BFA;'><i>[LIA: Capturando pantalla para contexto visual...]</i></span><br/>")
-                self.view.output_display.ensureCursorVisible()
             except Exception as e:
                 print(f"[Orchestrator] Error al capturar pantalla: {e}")
                 screenshot_path = None
@@ -274,42 +269,12 @@ class Orchestrator(QObject):
         self.view.output_display.ensureCursorVisible()
 
     def on_tool_call_detected(self, name: str, args: dict):
-        """Muestra en la interfaz visual que una herramienta está siendo ejecutada."""
-        cursor = self.view.output_display.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        prefix = "" if not self.view.output_display.toPlainText().strip() else "<br/>"
-        
-        info_msg = ""
-        if name == "open_application":
-            app_name = args.get("app_name", "")
-            info_msg = f"Abrir {app_name}"
-        elif name == "create_note":
-            title = args.get("title", "")
-            info_msg = f"Crear nota '{title}'"
-        elif name == "read_note":
-            title = args.get("title", "")
-            info_msg = f"Leer nota '{title}'"
-        elif name == "search_notes":
-            query = args.get("query", "")
-            info_msg = f"Buscar notas sobre '{query}'"
-        elif name == "write_note":
-            title = args.get("title", "")
-            info_msg = f"Editar/Escribir nota '{title}'"
-        elif name == "append_to_note":
-            title = args.get("title", "")
-            info_msg = f"Añadir a nota '{title}'"
-        else:
-            info_msg = f"Ejecutar {name}"
-            
-        cursor.insertHtml(f"{prefix}<span style='color: #C084FC;'><i>[Ejecutando comando: {info_msg}...]</i></span>")
-        self.view.output_display.ensureCursorVisible()
+        """Muestra en consola que una herramienta está siendo ejecutada."""
+        print(f"[Orchestrator - Tool Call] Detectado: {name} con argumentos {args}")
 
     def on_tool_call_completed(self, name: str, result: str):
-        """Muestra en la interfaz visual el resultado de la ejecución de la herramienta."""
-        cursor = self.view.output_display.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        cursor.insertHtml(f"<br/><span style='color: #00FF7F;'><i>[Sistema: {result}]</i></span>")
-        self.view.output_display.ensureCursorVisible()
+        """Muestra en consola el resultado de la ejecución de la herramienta."""
+        print(f"[Orchestrator - Tool Call] Completado: {name} -> {result}")
 
     def on_tokens_consumed(self, prompt_tokens: int, candidate_tokens: int, total_tokens: int):
         """Muestra en la interfaz el consumo de tokens de la interacción."""

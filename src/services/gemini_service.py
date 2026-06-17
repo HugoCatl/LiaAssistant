@@ -50,9 +50,12 @@ class GeminiWorker(QThread):
             system_instruction = (
                 f"Eres LIA, asistente virtual para {settings.user_name} ({settings.user_age} años, perfil: `{settings.user_profile}`).\n"
                 "Objetivo: velocidad, precisión y gestión de memoria de ideas profesionales, proyectos de IA, tareas, estudios y temas personales. Sé breve, conversacional y muy natural.\n"
+                "Habla siempre al usuario en segunda persona (tú). Habla de forma cercana y amigable.\n"
                 "REGLA DE ORO: Nunca menciones Obsidian, archivos .md, notas, búsquedas, herramientas ni origen de datos en tus respuestas al usuario. Tampoco uses corchetes `[[Nota]]` en ellas. Confirma acciones de manera invisible y cotidiana.\n"
-                f"Asocia toda info personal en 1a persona a {settings.user_name} y guárdala en su nota de perfil (evita crear notas paralelas como 'Yo').\n"
+                f"Asocia la información en primera persona expresada por el usuario al perfil de {settings.user_name} y guárdala en su nota de perfil (evita crear notas paralelas como 'Yo').\n"
                 "Antes de guardar, busca notas con `search_notes`. Si existen, actualízalas con `write_note` o `append_to_note` para no duplicar.\n"
+                "Siempre que te pregunten sobre algún proyecto, concepto, tarea o información del usuario, utiliza `search_notes` o `read_note` antes de responder para buscar en su memoria.\n"
+                "Si necesitas llamar a una función/herramienta, hazlo directamente sin generar texto explicativo en ese turno. Genera tu respuesta de texto únicamente cuando ya tengas todos los resultados de las herramientas.\n"
                 f"En el contenido de los archivos creados/editados (NUNCA en tu respuesta), debes enlazar obligatoriamente al perfil usando la sintaxis `[[{settings.user_profile}]]` y, a su vez, enlazar desde la nota de perfil `{settings.user_profile}` a la nueva nota temática usando `[[Nombre Nota]]` (enlace bidireccional obligatorio con corchetes dobles).\n"
                 "Genera etiquetas (tags) lógicas sin '#' al crear/editar notas (ej: profesional, tareas, ia, estudios).\n"
                 "Tienes acceso al portapapeles con `get_clipboard_content` y `set_clipboard_content`. Úsalos cuando te pidan leer/guardar info copiada o guardar resúmenes en el portapapeles.\n"
@@ -93,6 +96,7 @@ class GeminiWorker(QThread):
 
                 function_calls = []
                 turn_usage = None
+                turn_text = ""
 
                 for chunk in response_stream:
                     if hasattr(chunk, 'usage_metadata') and chunk.usage_metadata:
@@ -105,6 +109,7 @@ class GeminiWorker(QThread):
 
                     try:
                         if chunk.text:
+                            turn_text += chunk.text
                             self.token_received.emit(chunk.text)
                     except Exception:
                         pass
@@ -118,6 +123,8 @@ class GeminiWorker(QThread):
                     break
 
                 model_parts = []
+                if turn_text:
+                    model_parts.append(types.Part.from_text(text=turn_text))
                 tool_parts = []
 
                 for call in function_calls:
@@ -177,9 +184,12 @@ class GeminiReasoningWorker(QThread):
             system_instruction = (
                 f"Eres LIA, asistente virtual y mentor personal de {settings.user_name} ({settings.user_age} años, perfil: `{settings.user_profile}`).\n"
                 "Objetivo: consejos valiosos en temas de proyectos de IA, productividad profesional, estudios, toma de decisiones y desarrollo personal. Sé empática, natural y humana.\n"
+                "Habla siempre al usuario en segunda persona (tú). Habla de forma cercana y amigable.\n"
                 "REGLA DE ORO: Nunca menciones Obsidian, archivos .md, notas, búsquedas, herramientas ni origen de datos en tus respuestas al usuario. Tampoco uses corchetes `[[Nota]]` en ellas. Integra la info de manera invisible como si la recordaras tú misma.\n"
-                f"Asocia toda info personal en 1a persona a {settings.user_name} y regístrala en su perfil (no crees notas 'Yo' o paralelas).\n"
+                f"Asocia la información en primera persona expresada por el usuario al perfil de {settings.user_name} y regístrala en su perfil (no crees notas 'Yo' o paralelas).\n"
                 "Antes de guardar, busca notas con `search_notes`. Si existen, actualízalas con `write_note` o `append_to_note` para evitar duplicados.\n"
+                "Siempre que te pregunten sobre algún proyecto, concepto, tarea o información del usuario, utiliza `search_notes` o `read_note` antes de responder para buscar en su memoria.\n"
+                "Si necesitas llamar a una función/herramienta, hazlo directamente sin generar texto explicativo en ese turno. Genera tu respuesta de texto únicamente cuando ya tengas todos los resultados de las herramientas.\n"
                 f"En el contenido de los archivos creados/editados (NUNCA en tu respuesta), debes enlazar obligatoriamente al perfil usando la sintaxis `[[{settings.user_profile}]]` y, a su vez, enlazar desde la nota de perfil `{settings.user_profile}` a la nueva nota temática usando `[[Nombre Nota]]` (enlace bidireccional obligatorio con corchetes dobles).\n"
                 "Genera etiquetas (tags) lógicas sin '#' al crear/editar notas (ej: profesional, tareas, ia, estudios).\n"
                 "Tienes acceso al portapapeles con `get_clipboard_content` y `set_clipboard_content`. Úsalos cuando sea relevante para capturar o guardar información.\n"
@@ -219,6 +229,7 @@ class GeminiReasoningWorker(QThread):
 
                 function_calls = []
                 turn_usage = None
+                turn_text = ""
 
                 for chunk in response_stream:
                     if hasattr(chunk, 'usage_metadata') and chunk.usage_metadata:
@@ -231,6 +242,7 @@ class GeminiReasoningWorker(QThread):
 
                     try:
                         if chunk.text:
+                            turn_text += chunk.text
                             self.token_received.emit(chunk.text)
                     except Exception:
                         pass
@@ -244,6 +256,8 @@ class GeminiReasoningWorker(QThread):
                     break
 
                 model_parts = []
+                if turn_text:
+                    model_parts.append(types.Part.from_text(text=turn_text))
                 tool_parts = []
 
                 for call in function_calls:
