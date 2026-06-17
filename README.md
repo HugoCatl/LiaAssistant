@@ -81,6 +81,8 @@ LiaAssistant/
 
 ### 1. Requisitos Previos
 * **Python 3.10 o superior** instalado en el sistema.
+* **Obsidian** instalado con una bóveda (vault) local creada (donde LIA creará y organizará tus notas).
+* Una API Key de **Google Gemini** (consigue una gratis en Google AI Studio).
 
 ### 2. Configurar el Entorno
 ```bash
