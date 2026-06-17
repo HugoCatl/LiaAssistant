@@ -1,4 +1,5 @@
 from PyQt6.QtWidgets import QTextBrowser
+from PyQt6.QtGui import QTextCursor
 from PyQt6.QtCore import Qt
 
 class OutputDisplay(QTextBrowser):
@@ -40,3 +41,8 @@ class OutputDisplay(QTextBrowser):
             }
         """)
         self.setOpenExternalLinks(True)
+        # Automatic scroll to bottom on new content
+        self.textChanged.connect(self.scroll_to_bottom)
+
+    def scroll_to_bottom(self):
+        self.moveCursor(QTextCursor.MoveOperation.End)
