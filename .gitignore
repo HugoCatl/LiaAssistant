@@ -35,6 +35,9 @@ htmlcov/
 Thumbs.db
 desktop.ini
 
+# Live2D model assets (downloaded via scripts/download_model.py, not source)
+models/
+
 # Temporary and generated runtime files
 temp_*
 *.mp3

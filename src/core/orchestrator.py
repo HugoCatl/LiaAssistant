@@ -1,15 +1,21 @@
 import os
+from typing import TYPE_CHECKING
 import sounddevice as sd
-from PyQt6.QtCore import QObject, QUrl
+from PyQt6.QtCore import QObject, QUrl, QTimer
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from config import settings
 from src.core.state_manager import StateManager, AssistantState
-from src.gui.view import View
 from src.services.gemini_service import GeminiWorker, GeminiReasoningWorker
 from src.services.os_automation import open_application
 from src.io.audio_recorder import AudioRecorder
 from src.services.whisper_local import TranscriptionWorker
 from src.services.tts_service import TTSService
+from src.services.system_monitor import SystemMonitor
+from src.services.proactive_engine import ProactiveEngine
+from src.gui.components.mascot_bubble import MascotBubble
+
+if TYPE_CHECKING:
+    from src.gui.view import View
 
 class Orchestrator(QObject):
     """
@@ -17,11 +23,12 @@ class Orchestrator(QObject):
     state transitions, hardware audio recording, local Whisper STT,
     and background asynchronous Gemini API execution.
     """
-    def __init__(self, view: View, state_manager: StateManager, keyboard_listener):
+    def __init__(self, view: "View", state_manager: StateManager, keyboard_listener, mascot=None):
         super().__init__()
         self.view = view
         self.state_manager = state_manager
         self.keyboard_listener = keyboard_listener
+        self.mascot = mascot
         self.worker = None
         self.current_response_text = ""
 
@@ -58,6 +65,41 @@ class Orchestrator(QObject):
         self.audio_recorder.recording_started.connect(self.on_recording_started)
         self.audio_recorder.recording_stopped.connect(self.on_recording_stopped)
         self.audio_recorder.error_occurred.connect(self.on_audio_error)
+
+        # Wire the desktop mascot: clicking it toggles the panel
+        if self.mascot is not None:
+            self.mascot.clicked.connect(self.toggle_ui)
+
+        # --- Sistema proactivo (Fase 2): solo activo si hay mascota en escritorio ---
+        self.system_monitor = None
+        self.proactive_engine = None
+        self.bubble = None
+        self._pending_suggestion = ("", False)  # (prefill, auto_submit)
+
+        if self.mascot is not None and settings.proactive_enabled:
+            debug = settings.proactive_debug
+            # En modo debug los tiempos bajan a segundos para validar en vivo
+            poll_ms = 1500 if debug else 4000
+            self.system_monitor = SystemMonitor(poll_ms=poll_ms)
+            if debug:
+                self.proactive_engine = ProactiveEngine(
+                    global_cooldown_s=8.0, note_gap_s=30.0,
+                    focus_gap_s=30.0, eod_hour=0,
+                )
+                print("[Orchestrator] Sistema proactivo en MODO DEBUG (tiempos cortos).")
+            else:
+                self.proactive_engine = ProactiveEngine()
+            self.bubble = MascotBubble()
+
+            # Monitor -> Motor
+            self.system_monitor.clipboard_changed.connect(self.proactive_engine.on_clipboard_changed)
+            self.system_monitor.active_window_changed.connect(self.proactive_engine.on_active_window_changed)
+            self.system_monitor.tick.connect(self.proactive_engine.on_tick)
+
+            # Motor -> UI (burbuja + expresión de la mascota)
+            self.proactive_engine.suggestion.connect(self.on_proactive_suggestion)
+            self.bubble.accepted.connect(self.on_suggestion_accepted)
+            self.bubble.dismissed.connect(self.on_suggestion_dismissed)
 
     def show_welcome_greeting(self):
         """Muestra un saludo proactivo e inspirador en el display si está vacío, incitando a registrar ideas o tareas."""
@@ -136,6 +178,11 @@ class Orchestrator(QObject):
     def start(self):
         """Starts the background listening thread and displays startup greeting."""
         self.keyboard_listener.start()
+        if self.system_monitor is not None:
+            self.system_monitor.start()
+        # En modo debug, lanza una sugerencia de ejemplo a los 4s para ver el flujo
+        if self.proactive_engine is not None and settings.proactive_debug:
+            QTimer.singleShot(4000, self._show_demo_suggestion)
         self.show_welcome_greeting()
         print("[Orchestrator] Sistema de LIA Assistant iniciado.")
         print("[Orchestrator] Presione 'Shift_L + L' globalmente para mostrar/ocultar el panel.")
@@ -158,6 +205,10 @@ class Orchestrator(QObject):
     def on_state_changed(self, state: AssistantState):
         """Maneja el comportamiento y la interfaz de usuario al cambiar de estado."""
         self.view.update_status_dot(state)
+
+        # Reflejar el estado en la expresión de la mascota
+        if self.mascot is not None:
+            self.mascot.set_state(state)
 
         # Bloquear o desbloquear controles según el estado actual
         if state in (AssistantState.PROCESSING, AssistantState.RESPONDING):
@@ -211,6 +262,10 @@ class Orchestrator(QObject):
         user_text = self.view.input_field.text().strip()
         if not user_text:
             return
+
+        # Registrar actividad: el usuario interactuó con Lia (resetea inactividad)
+        if self.proactive_engine is not None:
+            self.proactive_engine.note_activity(is_capture=True)
 
         # Clear input field
         self.view.input_field.clear()
@@ -313,6 +368,56 @@ class Orchestrator(QObject):
                 os.remove("temp_screenshot.png")
             except Exception as e:
                 print(f"[Orchestrator] Error al eliminar temp_screenshot.png: {e}")
+
+    # --- Sistema Proactivo (Fase 2) ---
+
+    def _show_demo_suggestion(self):
+        """[debug] Muestra una sugerencia de ejemplo para validar el flujo visual."""
+        self.on_proactive_suggestion(
+            f"¡Hola {settings.user_name}! Soy Lia. Cuando vea algo que merezca la "
+            f"pena anotar, te avisaré así. ¿Probamos a crear una nota?",
+            "Crea una nota de prueba titulada 'Mi primera nota con Lia'.",
+            False, "reminder",
+        )
+
+    def on_proactive_suggestion(self, text: str, prefill: str, auto_submit: bool, mood: str):
+        """Muestra una sugerencia proactiva de Lia mediante la burbuja de la mascota."""
+        # No interrumpir si el panel está abierto o Lia está ocupada
+        if self.view.isVisible() or (self.worker and self.worker.isRunning()):
+            return
+        if self.audio_recorder.isRunning():
+            return
+
+        self._pending_suggestion = (prefill, auto_submit)
+        if self.mascot is not None:
+            self.mascot.set_mood(mood)
+            self.bubble.show_message(text, self.mascot, with_actions=True)
+
+    def on_suggestion_accepted(self):
+        """El usuario aceptó la sugerencia: abre el panel y precarga/ejecuta la acción."""
+        prefill, auto_submit = self._pending_suggestion
+        self._pending_suggestion = ("", False)
+        if self.proactive_engine is not None:
+            self.proactive_engine.record_feedback(True)
+
+        if not self.view.isVisible():
+            self.toggle_ui()
+
+        if prefill:
+            self.view.input_field.setText(prefill)
+            if auto_submit:
+                self.handle_input_submission()
+            else:
+                self.view.input_field.setFocus()
+
+    def on_suggestion_dismissed(self):
+        """El usuario descartó la sugerencia (o expiró). Reduce la insistencia."""
+        self._pending_suggestion = ("", False)
+        if self.proactive_engine is not None:
+            self.proactive_engine.record_feedback(False)
+        if self.mascot is not None:
+            from src.gui.mascot import MascotMood
+            self.mascot.set_mood(MascotMood.IDLE)
 
     # --- Hardware Audio & STT Handlers ---
 
