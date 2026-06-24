@@ -1,34 +1,32 @@
 from PyQt6.QtWidgets import QLineEdit
 from PyQt6.QtCore import Qt
 
+from src.gui import styles
+
+
 class InputField(QLineEdit):
-    """
-    Custom QLineEdit designed with a glassmorphic aesthetic.
-    Includes placeholder text and a custom focus border effect.
-    """
+    """QLineEdit con estetica 'pill' translucida y foco indigo."""
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setPlaceholderText("Escribe un mensaje para LIA o ejecuta un comando...")
-        self.setStyleSheet("""
-            QLineEdit {
-                background-color: rgba(25, 20, 30, 0.65);
-                border: 1px solid rgba(255, 255, 255, 0.12);
-                border-radius: 12px;
-                color: #FFFFFF;
-                padding: 12px 18px;
-                font-family: 'Segoe UI', 'Outfit', 'Inter', sans-serif;
+        self.setPlaceholderText("Escribe a Lia o pulsa el micro para hablar…")
+        self.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {styles.INPUT_BG};
+                border: 1px solid {styles.CARD_BORDER};
+                border-radius: 22px;
+                color: {styles.TEXT};
+                padding: 12px 20px;
+                font-family: {styles.FONT};
                 font-size: 14px;
-            }
-            QLineEdit:focus {
-                border: 1.5px solid #C084FC;
-                background-color: rgba(25, 20, 30, 0.88);
-            }
-            QLineEdit:disabled {
-                background-color: rgba(20, 15, 25, 0.4);
+            }}
+            QLineEdit:focus {{
+                border: 1px solid {styles.ACCENT};
+                background-color: {styles.INPUT_BG_FOCUS};
+            }}
+            QLineEdit:disabled {{
+                background-color: rgba(16, 18, 24, 0.4);
                 color: rgba(255, 255, 255, 0.25);
                 border: 1px solid rgba(255, 255, 255, 0.05);
-            }
-            QLineEdit::placeholder {
-                color: rgba(255, 255, 255, 0.35);
-            }
+            }}
+            QLineEdit::placeholder {{ color: rgba(255, 255, 255, 0.32); }}
         """)

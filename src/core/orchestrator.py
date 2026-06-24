@@ -13,6 +13,7 @@ from src.services.tts_service import TTSService
 from src.services.system_monitor import SystemMonitor
 from src.services.proactive_engine import ProactiveEngine
 from src.gui.components.mascot_bubble import MascotBubble
+from src.gui import styles
 
 if TYPE_CHECKING:
     from src.gui.view import View
@@ -31,6 +32,8 @@ class Orchestrator(QObject):
         self.mascot = mascot
         self.worker = None
         self.current_response_text = ""
+        self._response_anchor = None   # posicion donde empieza la respuesta (para render markdown)
+        self._pending_meta = None      # consumo de tokens, se muestra al final del turno
         self.history = []  # memoria conversacional (lista de types.Content) de la sesión
 
         # Setup QMediaPlayer for TTS responses
@@ -117,8 +120,8 @@ class Orchestrator(QObject):
             ]
             greeting = random.choice(greetings)
             self.view.output_display.setHtml(
-                f"<span style='color: #A78BFA; font-weight: bold;'>LIA:</span> "
-                f"<span style='color: #F1F5F9;'>{greeting}</span>"
+                f"<span style='color: #818CF8; font-weight: bold;'>LIA:</span> "
+                f"<span style='color: #E8EAF2;'>{greeting}</span>"
             )
 
     def show_info_menu(self):
@@ -130,9 +133,9 @@ class Orchestrator(QObject):
         menu.setStyleSheet("""
             QMenu {
                 background-color: rgba(22, 16, 28, 0.96);
-                border: 1px solid rgba(192, 132, 252, 0.4);
+                border: 1px solid rgba(99, 102, 241, 0.4);
                 border-radius: 8px;
-                color: #E2E8F0;
+                color: #E8EAF2;
                 padding: 4px;
                 font-family: 'Segoe UI', 'Outfit', sans-serif;
                 font-size: 11px;
@@ -143,12 +146,12 @@ class Orchestrator(QObject):
                 border-radius: 4px;
             }
             QMenu::item:selected {
-                background-color: rgba(192, 132, 252, 0.25);
+                background-color: rgba(99, 102, 241, 0.25);
                 color: #FFFFFF;
             }
             QMenu::separator {
                 height: 1px;
-                background: rgba(192, 132, 252, 0.2);
+                background: rgba(99, 102, 241, 0.2);
                 margin: 4px 8px;
             }
         """)
@@ -273,6 +276,8 @@ class Orchestrator(QObject):
         self.player.stop()
         TTSService.get_instance().stop()
         self.current_response_text = ""
+        self._response_anchor = None
+        self._pending_meta = None
 
         # Prevent starting a new request if one is already running
         if self.worker and self.worker.isRunning():
@@ -291,8 +296,8 @@ class Orchestrator(QObject):
         self.view.input_field.clear()
 
         # Update display logs
-        self.view.output_display.append(f"<span style='color: #C084FC; font-weight: bold;'>Tú:</span> <span style='color: #F1F5F9;'>{user_text}</span>")
-        self.view.output_display.append("<span style='color: #A78BFA; font-weight: bold;'>LIA:</span> ")
+        self.view.output_display.append(f"<span style='color: #818CF8; font-weight: bold;'>Tú:</span> <span style='color: #E8EAF2;'>{user_text}</span>")
+        self.view.output_display.append("<span style='color: #818CF8; font-weight: bold;'>LIA:</span> ")
         self.view.output_display.ensureCursorVisible()
 
         # Set UI state to processing
@@ -335,6 +340,11 @@ class Orchestrator(QObject):
         if self.state_manager.state == AssistantState.PROCESSING:
             self.state_manager.set_state(AssistantState.RESPONDING)
 
+        if self._response_anchor is None:
+            c = self.view.output_display.textCursor()
+            c.movePosition(c.MoveOperation.End)
+            self._response_anchor = c.position()
+
         self.current_response_text += token
 
         # Move text cursor to end and insert token inline (produces character-by-character animation)
@@ -352,15 +362,8 @@ class Orchestrator(QObject):
         print(f"[Orchestrator - Tool Call] Completado: {name} -> {result}")
 
     def on_tokens_consumed(self, prompt_tokens: int, candidate_tokens: int, total_tokens: int):
-        """Muestra en la interfaz el consumo de tokens de la interacción."""
-        cursor = self.view.output_display.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        cursor.insertHtml(
-            f"<br/><span style='color: #6B7280; font-size: 11px; font-style: italic;'>"
-            f"[Tokens usados - Entrada: {prompt_tokens} | Salida: {candidate_tokens} | Total: {total_tokens}]"
-            f"</span><br/>"
-        )
-        self.view.output_display.ensureCursorVisible()
+        """Guarda el consumo de tokens para mostrarlo al final del turno."""
+        self._pending_meta = (prompt_tokens, candidate_tokens, total_tokens)
 
     def on_error_occurred(self, err_msg: str):
         """Displays errors on the output panel."""
@@ -389,6 +392,22 @@ class Orchestrator(QObject):
     def on_generation_finished(self):
         """Restores the UI state to idle when the generation ends."""
         self.state_manager.set_state(AssistantState.IDLE)
+
+        # Render Markdown: sustituye el texto plano transmitido por su HTML
+        self.view.output_display.finalize_response(self._response_anchor, self.current_response_text)
+        self._response_anchor = None
+
+        # Mostrar el consumo de tokens al final del turno
+        if self._pending_meta:
+            p, c, t = self._pending_meta
+            cursor = self.view.output_display.textCursor()
+            cursor.movePosition(cursor.MoveOperation.End)
+            cursor.insertHtml(
+                f"<br/><span style='color: {styles.TEXT_DIM}; font-size: 11px; font-style: italic;'>"
+                f"[Tokens · entrada {p} · salida {c} · total {t}]</span><br/>"
+            )
+            self._pending_meta = None
+            self.view.output_display.ensureCursorVisible()
 
         # Trigger text to speech on the generated text
         if self.current_response_text:
@@ -576,7 +595,7 @@ class Orchestrator(QObject):
         status_msg = "activada" if new_state else "desactivada"
         cursor = self.view.output_display.textCursor()
         cursor.movePosition(cursor.MoveOperation.End)
-        cursor.insertHtml(f"<br/><span style='color: #C084FC;'><i>[Sistema: Respuesta por voz {status_msg}]</i></span><br/>")
+        cursor.insertHtml(f"<br/><span style='color: #818CF8;'><i>[Sistema: Respuesta por voz {status_msg}]</i></span><br/>")
         self.view.output_display.ensureCursorVisible()
         print(f"[Orchestrator] Respuesta por voz (TTS) cambiada a: {new_state}")
 
@@ -592,7 +611,7 @@ class Orchestrator(QObject):
 
         cursor = self.view.output_display.textCursor()
         cursor.movePosition(cursor.MoveOperation.End)
-        cursor.insertHtml(f"<br/><span style='color: #C084FC;'><i>[Sistema: Micrófono activo cambiado a '{name}']</i></span><br/>")
+        cursor.insertHtml(f"<br/><span style='color: #818CF8;'><i>[Sistema: Micrófono activo cambiado a '{name}']</i></span><br/>")
         self.view.output_display.ensureCursorVisible()
         print(f"[Orchestrator] Micrófono de entrada cambiado a ID {device_id} ({name})")
 

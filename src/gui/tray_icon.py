@@ -20,8 +20,8 @@ def _make_orb_icon(size: int = 64) -> QIcon:
 
     center = QPointF(size / 2.0, size / 2.0)
     grad = QRadialGradient(center, size / 2.0)
-    grad.setColorAt(0.0, QColor(216, 180, 254))   # lila claro (núcleo)
-    grad.setColorAt(1.0, QColor(124, 58, 237))     # violeta (borde)
+    grad.setColorAt(0.0, QColor(199, 210, 254))   # indigo claro (núcleo)
+    grad.setColorAt(1.0, QColor(55, 48, 163))      # indigo profundo (borde)
 
     painter.setPen(Qt.PenStyle.NoPen)
     painter.setBrush(grad)

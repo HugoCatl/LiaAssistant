@@ -12,7 +12,7 @@ from src.gui.mascot_behavior import MascotBehaviorMixin, MascotMood
 
 # Paleta por mood: (núcleo claro, color base, acento/halo). Marca Lia = violeta.
 _MOOD_COLORS = {
-    MascotMood.IDLE:      ("#C9C5FF", "#7F77DD", "#534AB7"),
+    MascotMood.IDLE:      ("#C7D2FE", "#6366F1", "#3730A3"),
     MascotMood.CURIOUS:   ("#9FE1CB", "#1D9E75", "#0F6E56"),
     MascotMood.REMINDER:  ("#FAD79A", "#EF9F27", "#854F0B"),
     MascotMood.LISTENING: ("#F3B79E", "#D85A30", "#993C1D"),

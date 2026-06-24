@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QGraphicsDropShadowEffect, QMenu
 from PyQt6.QtCore import Qt, QPoint, QSize, QRectF, QPointF
-from PyQt6.QtGui import QColor, QIcon, QPixmap, QPainter, QPainterPath, QPen, QBrush
+from PyQt6.QtGui import QColor, QIcon, QPixmap, QPainter, QPainterPath, QPen, QBrush, QRadialGradient
 
 from src.gui.components.input_field import InputField
 from src.gui.components.output_display import OutputDisplay
@@ -136,6 +136,22 @@ def create_vector_icon(icon_type: str, color_hex: str, size: int = 32) -> QIcon:
     painter.end()
     return QIcon(pixmap)
 
+def _make_orb_pixmap(size: int = 22) -> QPixmap:
+    """Mini-orbe indigo para la cabecera (mismo lenguaje visual que la mascota)."""
+    pm = QPixmap(size, size)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    c = QPointF(size / 2.0, size / 2.0)
+    g = QRadialGradient(c, size / 2.0)
+    g.setColorAt(0.0, QColor(199, 210, 254))
+    g.setColorAt(1.0, QColor(55, 48, 163))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QBrush(g))
+    p.drawEllipse(c, size * 0.46, size * 0.46)
+    p.end()
+    return pm
+
 class IconButton(QPushButton):
     """A QPushButton that automatically swaps between normal and hover QIcons."""
     def __init__(self, icon_type: str, normal_color: str, hover_color: str, size: int = 24, parent=None):
@@ -164,8 +180,8 @@ class MicButton(QPushButton):
     def __init__(self, size: int = 24, parent=None):
         super().__init__(parent)
         self.is_active = False
-        self.normal_icon = create_vector_icon("mic", "#C084FC", size)
-        self.hover_icon = create_vector_icon("mic", "#E9D5FF", size)
+        self.normal_icon = create_vector_icon("mic", "#818CF8", size)
+        self.hover_icon = create_vector_icon("mic", "#A5B4FC", size)
         self.active_icon = create_vector_icon("mic_active", "#EC4899", size)
         
         self.setIcon(self.normal_icon)
@@ -219,7 +235,7 @@ class View(QWidget):
         # Glow effect (Purple drop shadow)
         shadow = QGraphicsDropShadowEffect(self)
         shadow.setBlurRadius(25)
-        shadow.setColor(QColor(192, 132, 252, 60))  # Soft purple aura
+        shadow.setColor(QColor(99, 102, 241, 60))  # Soft purple aura
         shadow.setOffset(0, 0)
         self.card.setGraphicsEffect(shadow)
 
@@ -233,30 +249,43 @@ class View(QWidget):
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(8)
 
-        # Brand name (LIA ASSISTANT)
-        self.title_label = QLabel("LIA ASSISTANT", self.card)
-        self.title_label.setStyleSheet("""
-            QLabel {
-                color: #C084FC;
-                font-family: 'Segoe UI', 'Outfit', 'Inter', sans-serif;
-                font-weight: 900;
-                font-size: 13px;
-                letter-spacing: 2.5px;
-                background: transparent;
-            }
-        """)
-        header_layout.addWidget(self.title_label)
+        # Brand: mini-orbe + wordmark apilado
+        self.brand_orb = QLabel(self.card)
+        self.brand_orb.setPixmap(_make_orb_pixmap(22))
+        self.brand_orb.setFixedSize(22, 22)
+        header_layout.addWidget(self.brand_orb)
+
+        brand_col = QVBoxLayout()
+        brand_col.setContentsMargins(0, 0, 0, 0)
+        brand_col.setSpacing(0)
+        self.title_label = QLabel("LIA", self.card)
+        self.title_label.setStyleSheet(styles.title_style(14))
+        brand_sub = QLabel("ASSISTANT", self.card)
+        brand_sub.setStyleSheet(
+            "QLabel { color: %s; font-family: %s; font-size: 9px;"
+            " letter-spacing: 3px; background: transparent; }" % (styles.TEXT_DIM, styles.FONT))
+        brand_col.addWidget(self.title_label)
+        brand_col.addWidget(brand_sub)
+        header_layout.addLayout(brand_col)
 
         header_layout.addStretch()
 
-        # State Indicator Dot
-        self.status_dot = QFrame(self.card)
-        self.status_dot.setFixedSize(10, 10)
+        # Pill de estado (punto + texto dinamico)
+        self.status_pill = QFrame(self.card)
+        self.status_pill.setObjectName("StatusPill")
+        pill_l = QHBoxLayout(self.status_pill)
+        pill_l.setContentsMargins(9, 3, 11, 3)
+        pill_l.setSpacing(6)
+        self.status_dot = QFrame(self.status_pill)
+        self.status_dot.setFixedSize(7, 7)
+        self.status_label = QLabel("", self.status_pill)
+        pill_l.addWidget(self.status_dot)
+        pill_l.addWidget(self.status_label)
         self.update_status_dot(AssistantState.IDLE)
-        header_layout.addWidget(self.status_dot)
+        header_layout.addWidget(self.status_pill)
 
         # Info Button (Manual info vector icon)
-        self.info_button = IconButton("info", "rgba(255, 255, 255, 0.45)", "#C084FC", 16, self.card)
+        self.info_button = IconButton("info", "rgba(255, 255, 255, 0.45)", "#818CF8", 16, self.card)
         self.info_button.setFixedSize(24, 24)
         self.info_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.info_button.setStyleSheet("""
@@ -275,7 +304,7 @@ class View(QWidget):
         header_layout.addWidget(self.info_button)
 
         # Settings/Microphone Config Button (Gear vector icon)
-        self.config_button = IconButton("settings", "rgba(255, 255, 255, 0.45)", "#C084FC", 16, self.card)
+        self.config_button = IconButton("settings", "rgba(255, 255, 255, 0.45)", "#818CF8", 16, self.card)
         self.config_button.setFixedSize(24, 24)
         self.config_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.config_button.setStyleSheet("""
@@ -358,22 +387,26 @@ class View(QWidget):
         self.move(x, y)
 
     def update_status_dot(self, state: AssistantState):
-        """Updates the status dot color to reflect the assistant's state."""
-        color_map = {
-            AssistantState.IDLE: "#C084FC",        # Light Purple / Lilac
-            AssistantState.LISTENING: "#EC4899",   # Neon Pink / Fucsia
-            AssistantState.PROCESSING: "#F59E0B",  # Amber / Yellow-Orange
-            AssistantState.RESPONDING: "#3B82F6"   # Electric Blue
+        """Actualiza el color del punto y el texto de la pill segun el estado."""
+        info = {
+            AssistantState.IDLE: ("#34D399", "En línea"),
+            AssistantState.LISTENING: ("#F472B6", "Escuchando"),
+            AssistantState.PROCESSING: ("#F59E0B", "Pensando"),
+            AssistantState.RESPONDING: ("#818CF8", "Respondiendo"),
         }
-        color = color_map.get(state, "#C084FC")
-        self.status_dot.setStyleSheet(f"""
-            QFrame {{
-                background-color: {color};
-                border-radius: 5px;
-                border: 1px solid rgba(255, 255, 255, 0.2);
-            }}
-        """)
-        self.status_dot.setToolTip(f"Estado: {state.value}")
+        color, text = info.get(state, ("#34D399", "En línea"))
+        self.status_dot.setStyleSheet(
+            "QFrame { background-color: %s; border-radius: 3px; }" % color)
+        if hasattr(self, "status_label"):
+            self.status_label.setText(text)
+            self.status_label.setStyleSheet(
+                "QLabel { color: %s; font-family: %s; font-size: 11px;"
+                " font-weight: 600; background: transparent; }" % (color, styles.FONT))
+        if hasattr(self, "status_pill"):
+            self.status_pill.setStyleSheet(
+                "QFrame#StatusPill { background-color: rgba(99,102,241,0.10);"
+                " border: 1px solid rgba(99,102,241,0.25); border-radius: 11px; }")
+            self.status_pill.setToolTip("Estado: %s" % state.value)
 
     def set_recording_active(self, active: bool):
         """Applies visual recording feedback to the microphone button."""
@@ -396,11 +429,11 @@ class View(QWidget):
                     border-radius: 12px;
                 }
                 QPushButton:hover {
-                    background-color: rgba(192, 132, 252, 0.15);
-                    border: 1px solid rgba(192, 132, 252, 0.4);
+                    background-color: rgba(99, 102, 241, 0.15);
+                    border: 1px solid rgba(99, 102, 241, 0.4);
                 }
                 QPushButton:pressed {
-                    background-color: rgba(192, 132, 252, 0.3);
+                    background-color: rgba(99, 102, 241, 0.3);
                 }
                 QPushButton:disabled {
                     background-color: rgba(20, 15, 25, 0.4);
@@ -417,9 +450,9 @@ class View(QWidget):
         menu.setStyleSheet("""
             QMenu {
                 background-color: rgba(22, 16, 28, 0.95);
-                border: 1px solid rgba(192, 132, 252, 0.4);
+                border: 1px solid rgba(99, 102, 241, 0.4);
                 border-radius: 8px;
-                color: #E2E8F0;
+                color: #E8EAF2;
                 padding: 4px;
                 font-family: 'Segoe UI', 'Outfit', sans-serif;
                 font-size: 12px;
@@ -430,12 +463,12 @@ class View(QWidget):
                 border-radius: 4px;
             }
             QMenu::item:selected {
-                background-color: rgba(192, 132, 252, 0.25);
+                background-color: rgba(99, 102, 241, 0.25);
                 color: #FFFFFF;
             }
             QMenu::separator {
                 height: 1px;
-                background: rgba(192, 132, 252, 0.2);
+                background: rgba(99, 102, 241, 0.2);
                 margin: 4px 8px;
             }
         """)
