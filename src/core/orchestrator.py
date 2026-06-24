@@ -90,6 +90,9 @@ class Orchestrator(QObject):
         # Recordatorios con hora -> aviso en la burbuja de la mascota
         self.reminder_service = ReminderService()
         self.reminder_service.reminder_due.connect(self.on_reminder_due)
+        self._reminder_queue = []
+        self._reminder_bubble = None
+        self._current_reminder = None
 
         if self.mascot is not None and settings.proactive_enabled:
             debug = settings.proactive_debug
@@ -447,15 +450,44 @@ class Orchestrator(QObject):
         self.view.output_display.setHtml("".join(blocks))
 
     def on_reminder_due(self, texto: str):
-        """Un recordatorio vencido: avisa con la burbuja de la mascota."""
+        """Un recordatorio vencido entra en la cola y se muestra de uno en uno."""
         logging.getLogger("lia").info("Recordatorio vencido: %s", texto)
         if self.mascot is None:
             return
-        if self.bubble is None:
-            self.bubble = MascotBubble()
+        self._reminder_queue.append(texto)
+        self._show_next_reminder()
+
+    def _show_next_reminder(self):
+        if self.mascot is None or not self._reminder_queue:
+            return
+        if self._reminder_bubble is None:
+            from src.gui.components.reminder_bubble import ReminderBubble
+            self._reminder_bubble = ReminderBubble()
+            self._reminder_bubble.done.connect(self._on_reminder_done)
+            self._reminder_bubble.snooze.connect(self._on_reminder_snooze)
+        if self._reminder_bubble.isVisible():
+            return  # ya hay uno en pantalla; el resto espera su turno
+        self._current_reminder = self._reminder_queue.pop(0)
         from src.gui.mascot_behavior import MascotMood
         self.mascot.set_mood(MascotMood.REMINDER)
-        self.bubble.show_message(f"⏰ Recordatorio: {texto}", self.mascot, with_actions=False)
+        self._reminder_bubble.show_for(self._current_reminder, self.mascot)
+
+    def _reset_reminder_mood(self):
+        from src.gui.mascot_behavior import MascotMood
+        busy = self.worker is not None and self.worker.isRunning()
+        if self.mascot is not None and not busy:
+            self.mascot.set_mood(MascotMood.IDLE)
+
+    def _on_reminder_done(self):
+        self._reset_reminder_mood()
+        self._show_next_reminder()
+
+    def _on_reminder_snooze(self):
+        from src.services.reminders import crear_recordatorio
+        if self._current_reminder:
+            crear_recordatorio(self._current_reminder, en_minutos=5)
+        self._reset_reminder_mood()
+        self._show_next_reminder()
 
     def quit_app(self):
         """Cierra LIA por completo: detiene los hilos de fondo y mata el proceso."""

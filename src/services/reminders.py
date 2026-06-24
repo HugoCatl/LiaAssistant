@@ -61,11 +61,16 @@ def crear_recordatorio(texto: str, fecha_hora: str = "", en_minutos: int = 0) ->
         when = _parse_when(fecha_hora, en_minutos)
     except ValueError:
         return "No entendí la hora del recordatorio. Dímelo como 'hoy a las 17:30' o 'en 20 minutos'."
+    due = when.strftime(_FMT)
     items = _load()
+    # Evitar duplicados: mismo texto y misma hora aun pendiente
+    for i in items:
+        if not i.get("done") and i.get("texto") == texto and i.get("due") == due:
+            return f"Ya tenías ese recordatorio para el {when.strftime('%d/%m a las %H:%M')}."
     items.append({
         "id": int(datetime.now().timestamp() * 1000),
         "texto": texto,
-        "due": when.strftime(_FMT),
+        "due": due,
         "done": False,
     })
     _save(items)
