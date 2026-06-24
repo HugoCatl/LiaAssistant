@@ -14,6 +14,7 @@ from src.services.system_monitor import SystemMonitor
 from src.services.proactive_engine import ProactiveEngine
 from src.gui.components.mascot_bubble import MascotBubble
 from src.gui import styles
+from config.paths import runtime_file
 
 if TYPE_CHECKING:
     from src.gui.view import View
@@ -61,7 +62,7 @@ class Orchestrator(QObject):
         self.view.input_field.returnPressed.connect(self.handle_input_submission)
 
         # Wire settings config wheel and microphone recording buttons
-        self.view.config_button.clicked.connect(self.show_config_menu)
+        self.view.config_button.clicked.connect(self.open_settings)
         self.view.info_button.clicked.connect(self.show_info_menu)
         self.view.mic_button.clicked.connect(self.toggle_recording)
 
@@ -312,7 +313,7 @@ class Orchestrator(QObject):
         if self.detect_vision_intent(user_text):
             try:
                 from PIL import ImageGrab
-                screenshot_path = "temp_screenshot.png"
+                screenshot_path = runtime_file("temp_screenshot.png")
                 screenshot = ImageGrab.grab()
                 screenshot.save(screenshot_path, "PNG")
                 print(f"[Orchestrator] Capturando pantalla para contexto visual: {screenshot_path}")
@@ -449,9 +450,10 @@ class Orchestrator(QObject):
             self.worker = None
 
         # Clean up screenshot if it exists
-        if os.path.exists("temp_screenshot.png"):
+        _shot = runtime_file("temp_screenshot.png")
+        if os.path.exists(_shot):
             try:
-                os.remove("temp_screenshot.png")
+                os.remove(_shot)
             except Exception as e:
                 print(f"[Orchestrator] Error al eliminar temp_screenshot.png: {e}")
 
@@ -583,6 +585,46 @@ class Orchestrator(QObject):
         cursor.movePosition(cursor.MoveOperation.End)
         cursor.insertHtml(f"<br/><span style='color: #F87171;'><b>Error de Audio:</b> {err_msg}</span><br/>")
         self.view.output_display.ensureCursorVisible()
+
+    def open_settings(self):
+        """Abre el panel de Ajustes (perfil, conexion, voz y microfono)."""
+        from PyQt6.QtWidgets import QDialog
+        from src.gui.onboarding import OnboardingDialog, apply_config
+        dlg = OnboardingDialog(
+            current_name=settings.user_name if settings.user_name != "Usuario" else "",
+            current_key=settings.gemini_api_key or "",
+            current_vault=str(settings.obsidian_vault_path or ""),
+            mic_devices=self._list_microphones(),
+            current_mic=self.active_mic_id,
+            tts_enabled=TTSService.get_instance().enabled,
+            parent=self.view,
+        )
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        v = dlg.values()
+        apply_config(settings, v["name"], v["key"], v["vault"])
+        if v.get("tts") is not None:
+            TTSService.get_instance().set_enabled(v["tts"])
+        if v.get("mic_id") is not None:
+            self.active_mic_id = v["mic_id"]
+        # Refrescar el saludo con el nuevo nombre si el panel esta vacio
+        if not self.view.output_display.toPlainText().strip():
+            self.show_welcome_greeting()
+
+    def _list_microphones(self):
+        """Devuelve [(id, nombre)] de los microfonos de entrada disponibles."""
+        devices = []
+        try:
+            seen = set()
+            for idx, dev in enumerate(sd.query_devices()):
+                if dev.get('max_input_channels', 0) > 0:
+                    name = dev.get('name', f"Microfono {idx}")
+                    if name not in seen:
+                        seen.add(name)
+                        devices.append((idx, name))
+        except Exception as e:
+            print(f"[Orchestrator] Error al listar microfonos: {e}")
+        return devices
 
     def show_config_menu(self):
         """Queries connected input devices and requests view to spawn selector QMenu."""

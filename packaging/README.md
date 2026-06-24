@@ -1,39 +1,41 @@
-# Empaquetado de LIA (.exe)
+# Empaquetado de LIA
 
-Genera un único `LIA.exe` para Windows con PyInstaller.
+Dos formas de distribuir LIA. Ambas parten de construir `LIA.exe` con PyInstaller.
 
-## Cómo construirlo
+## 1) Construir el .exe (siempre)
 
-Desde la raíz del proyecto, en Windows, **con el venv del proyecto activado**
-(para que PyInstaller vea todas las dependencias instaladas):
+En Windows, con el venv del proyecto activado, **doble clic en `build.bat`**.
+Hace: activa el venv, instala PyInstaller/Pillow, genera el icono, compila
+`LIA.exe`, lo copia a tu carpeta de Descargas y crea un acceso directo en el
+Escritorio. El ejecutable queda en `packaging\dist\LIA.exe` y en Descargas.
 
-```bat
-.\venv\Scripts\activate
-packaging\build.bat
-```
+## 2a) Modo portatil (rapido)
 
-El ejecutable queda en `packaging\dist\LIA.exe`.
+Te quedas con `LIA.exe` tal cual (en Descargas o donde quieras). El acceso
+directo del Escritorio ya lo crea `build.bat`. Para que arranque con Windows:
+doble clic en `activar_inicio_con_windows.bat` (y `desactivar_...` para quitarlo).
 
-`build.bat` hace tres cosas: instala `pyinstaller` y `pillow`, genera el icono
-`lia.ico` (un orbe morado a juego con la mascota) y ejecuta `pyinstaller lia.spec`.
+## 2b) Instalador real (recomendado para "plug and play")
 
-## Qué incluye (y qué no)
+Genera un `LIA-Setup.exe` que deja **elegir la carpeta de instalacion**, crea
+accesos directos, opcion de inicio con Windows y un **desinstalador**.
 
-- **Incluye**: PyQt6, el cliente de Gemini, edge-tts, sounddevice (con la DLL de
-  PortAudio), y las librerías de IA local (faster-whisper, fastembed/onnxruntime).
-- **No incluye los modelos** de voz (Whisper) ni de embeddings (fastembed): se
-  descargan a la caché del usuario la **primera vez** que se usan. Por eso el
-  primer arranque con voz/búsqueda semántica tarda un poco más y necesita red.
-- **No incluye el `.env`** (lleva tu clave de Gemini). En el primer arranque, el
-  **onboarding** crea la configuración. Si quieres distribuirlo ya configurado,
-  añade `.env.example` a `datas` en `lia.spec`.
+1. Instala Inno Setup (gratis): https://jrsoftware.org/isdl.php
+2. Asegurate de tener `packaging\dist\LIA.exe` (lo deja `build.bat`).
+3. Doble clic en `packaging\installer.iss` -> boton **Compile**
+   (o `ISCC.exe packaging\installer.iss`).
+4. Obtienes `packaging\LIA-Setup.exe`. Ese es el que compartes/instalas.
 
-## Notas y posibles ajustes
+El instalador no pide permisos de administrador (instala en la carpeta del
+usuario), por lo que la instalacion es directa.
 
-- Si al abrir el `.exe` falta algún módulo (`ModuleNotFoundError`), añádelo a
-  `hiddenimports` en `lia.spec` y reconstruye.
-- El primer build es lento (analiza todas las dependencias). Los siguientes van
-  más rápidos si no usas `--clean`.
-- Para arranque automático con Windows (Fase 5), crea un acceso directo a
-  `LIA.exe` en la carpeta `shell:startup`. Esto se puede automatizar más adelante
-  desde el panel de ajustes con un toggle.
+## Donde guarda LIA sus datos
+
+Config (`.env`), audios temporales, capturas y la base de feedback se guardan en
+`%LOCALAPPDATA%\LiaAssistant`, no en Descargas ni junto al .exe. Las notas van a
+tu vault de Obsidian (la carpeta que elijas en los ajustes).
+
+## Si el .exe falla al abrir
+
+Suele ser un `ModuleNotFoundError` de las librerias de IA. Anade ese modulo a
+`hiddenimports` en `lia.spec` y reconstruye.

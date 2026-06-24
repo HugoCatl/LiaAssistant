@@ -1,34 +1,34 @@
 """
-Onboarding / configuracion de LIA.
+Onboarding / Ajustes de LIA.
 
-Si falta la clave de Gemini o la ruta del vault, en vez de arrancar roto en
-silencio, mostramos un dialogo elegante para configurarlo. Tambien se puede
-abrir en cualquier momento desde la bandeja ("Configurar...").
+Mismo dialogo para dos usos:
+  - Primer arranque (ensure_configured): pide lo minimo (nombre, clave, vault).
+  - Ajustes (open desde la rueda): ademas permite TTS on/off y elegir microfono.
 
-Guarda en .env: USER_NAME, GEMINI_API_KEY y OBSIDIAN_VAULT_PATH, y actualiza
-los settings en memoria para el arranque actual.
+Guarda en .env: USER_NAME, USER_PROFILE, GEMINI_API_KEY y OBSIDIAN_VAULT_PATH.
+USER_PROFILE = nombre, para que la nota de perfil en Obsidian se llame como tu
+(antes se quedaba como 'Usuario').
 """
 from pathlib import Path
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QFileDialog, QFrame, QGraphicsDropShadowEffect,
+    QCheckBox, QComboBox,
 )
 from PyQt6.QtCore import Qt, QPoint
 from PyQt6.QtGui import QColor
 
 from src.gui import styles
+from config.paths import env_path
 
-# .env en la raiz del proyecto (robusto sin importar el cwd)
-_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
+_ENV_PATH = env_path()
 
 
 def _upsert_env(updates: dict):
     """Crea o actualiza claves en .env conservando el resto del archivo."""
-    lines = []
-    if _ENV_PATH.exists():
-        lines = _ENV_PATH.read_text(encoding="utf-8").splitlines()
-
+    path = env_path()
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
     done = set()
     for i, line in enumerate(lines):
         s = line.strip()
@@ -37,27 +37,33 @@ def _upsert_env(updates: dict):
             if key in updates:
                 lines[i] = f"{key}={updates[key]}"
                 done.add(key)
-
     for key, value in updates.items():
         if key not in done:
             lines.append(f"{key}={value}")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    _ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+def _section(text, parent):
+    lbl = QLabel(text.upper(), parent)
+    lbl.setStyleSheet(
+        "QLabel { color: %s; font-family: %s; font-size: 10px; font-weight: 700;"
+        " letter-spacing: 2px; background: transparent; }" % (styles.ACCENT_SOFT, styles.FONT))
+    return lbl
 
 
 class OnboardingDialog(QDialog):
-    """Dialogo glassmorphic para configurar nombre, clave de Gemini y vault."""
+    """Dialogo de configuracion/ajustes con la identidad indigo."""
 
-    def __init__(self, current_name="", current_key="", current_vault="", parent=None):
+    def __init__(self, current_name="", current_key="", current_vault="",
+                 mic_devices=None, current_mic=None, tts_enabled=None, parent=None):
         super().__init__(parent)
         self._drag_pos = QPoint()
+        self._settings_mode = mic_devices is not None
 
-        self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog
-        )
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True)
-        self.setMinimumWidth(440)
+        self.setMinimumWidth(460)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 16)
@@ -67,44 +73,40 @@ class OnboardingDialog(QDialog):
         card.setStyleSheet(styles.card_style())
         shadow = QGraphicsDropShadowEffect(self)
         shadow.setBlurRadius(28)
-        shadow.setColor(QColor(192, 132, 252, 70))
-        shadow.setOffset(0, 2)
+        shadow.setColor(QColor(40, 45, 90, 150))
+        shadow.setOffset(0, 3)
         card.setGraphicsEffect(shadow)
         root.addWidget(card)
 
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(26, 24, 26, 24)
-        layout.setSpacing(8)
+        lay = QVBoxLayout(card)
+        lay.setContentsMargins(26, 22, 26, 22)
+        lay.setSpacing(7)
 
-        title = QLabel("CONFIGURA LIA", card)
+        title = QLabel("AJUSTES" if self._settings_mode else "CONFIGURA LIA", card)
         title.setStyleSheet(styles.title_style(16))
-        layout.addWidget(title)
+        lay.addWidget(title)
+        lay.addSpacing(4)
 
-        intro = QLabel(
-            "Solo necesito un par de datos para empezar.\n"
-            "Podras cambiarlos cuando quieras desde la bandeja.", card
-        )
-        intro.setWordWrap(True)
-        intro.setStyleSheet(styles.label_style(dim=True))
-        layout.addWidget(intro)
-        layout.addSpacing(8)
-
-        layout.addWidget(self._field_label("Tu nombre", card))
+        # --- Perfil ---
+        lay.addWidget(_section("Perfil", card))
+        lay.addWidget(self._field_label("Tu nombre", card))
         self.name_input = QLineEdit(current_name, card)
         self.name_input.setPlaceholderText("Hugo")
         self.name_input.setStyleSheet(styles.input_style())
-        layout.addWidget(self.name_input)
-        layout.addSpacing(6)
+        lay.addWidget(self.name_input)
+        lay.addSpacing(8)
 
-        layout.addWidget(self._field_label("Clave de la API de Gemini", card))
+        # --- Conexion ---
+        lay.addWidget(_section("Conexión", card))
+        lay.addWidget(self._field_label("Clave de la API de Gemini", card))
         self.key_input = QLineEdit(current_key, card)
         self.key_input.setPlaceholderText("AQ.xxxxxxxx...")
         self.key_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.key_input.setStyleSheet(styles.input_style())
-        layout.addWidget(self.key_input)
-        layout.addSpacing(6)
+        lay.addWidget(self.key_input)
+        lay.addSpacing(4)
 
-        layout.addWidget(self._field_label("Carpeta del vault de Obsidian", card))
+        lay.addWidget(self._field_label("Carpeta del vault de Obsidian", card))
         vault_row = QHBoxLayout()
         vault_row.setSpacing(8)
         self.vault_input = QLineEdit(current_vault, card)
@@ -116,14 +118,57 @@ class OnboardingDialog(QDialog):
         browse.setStyleSheet(styles.secondary_button_style())
         browse.clicked.connect(self._browse_vault)
         vault_row.addWidget(browse)
-        layout.addLayout(vault_row)
+        lay.addLayout(vault_row)
 
+        # --- Voz y microfono (solo en modo ajustes) ---
+        self.tts_check = None
+        self.mic_combo = None
+        if self._settings_mode:
+            lay.addSpacing(8)
+            lay.addWidget(_section("Voz y micrófono", card))
+            self.tts_check = QCheckBox("Respuesta por voz (TTS)", card)
+            self.tts_check.setChecked(bool(tts_enabled))
+            self.tts_check.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.tts_check.setStyleSheet(
+                "QCheckBox { color: %s; font-family: %s; font-size: 12px; spacing: 8px;"
+                " background: transparent; }"
+                " QCheckBox::indicator { width: 16px; height: 16px; border-radius: 4px;"
+                " border: 1px solid rgba(255,255,255,0.25); background: %s; }"
+                " QCheckBox::indicator:checked { background: %s; border: 1px solid %s; }"
+                % (styles.TEXT, styles.FONT, styles.INPUT_BG, styles.ACCENT, styles.ACCENT))
+            lay.addWidget(self.tts_check)
+            lay.addSpacing(4)
+            lay.addWidget(self._field_label("Micrófono", card))
+            self.mic_combo = QComboBox(card)
+            self.mic_combo.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.mic_combo.setStyleSheet(
+                "QComboBox { background: %s; border: 1px solid rgba(255,255,255,0.12);"
+                " border-radius: 9px; color: %s; padding: 7px 10px; font-size: 12px;"
+                " font-family: %s; }"
+                " QComboBox:focus { border: 1px solid %s; }"
+                " QComboBox::drop-down { border: none; width: 22px; }"
+                " QComboBox QAbstractItemView { background: #14161C; color: %s;"
+                " selection-background-color: rgba(99,102,241,0.35);"
+                " border: 1px solid %s; }"
+                % (styles.INPUT_BG, styles.TEXT, styles.FONT, styles.ACCENT,
+                   styles.TEXT, styles.CARD_BORDER))
+            for dev_id, dev_name in (mic_devices or []):
+                self.mic_combo.addItem(dev_name, dev_id)
+            if current_mic is not None:
+                idx = self.mic_combo.findData(current_mic)
+                if idx >= 0:
+                    self.mic_combo.setCurrentIndex(idx)
+            lay.addWidget(self.mic_combo)
+
+        # Aviso de validacion
         self.warning = QLabel("", card)
-        self.warning.setStyleSheet("color: #F87171; font-family: %s; font-size: 11px;" % styles.FONT)
+        self.warning.setStyleSheet(
+            "color: %s; font-family: %s; font-size: 11px; background: transparent;" % (styles.DANGER, styles.FONT))
         self.warning.setWordWrap(True)
-        layout.addWidget(self.warning)
-        layout.addSpacing(6)
+        lay.addSpacing(6)
+        lay.addWidget(self.warning)
 
+        # Botones
         buttons = QHBoxLayout()
         buttons.addStretch()
         cancel = QPushButton("Cancelar", card)
@@ -137,11 +182,9 @@ class OnboardingDialog(QDialog):
         save.setDefault(True)
         save.clicked.connect(self._on_save)
         buttons.addWidget(save)
-        layout.addLayout(buttons)
+        lay.addLayout(buttons)
 
-        self._name = current_name
-        self._key = current_key
-        self._vault = current_vault
+        self._result = None
 
     def _field_label(self, text, parent):
         lbl = QLabel(text, parent)
@@ -163,13 +206,17 @@ class OnboardingDialog(QDialog):
         if not vault:
             self.warning.setText("Falta la carpeta del vault.")
             return
-        self._name = name or "Usuario"
-        self._key = key
-        self._vault = vault
+        self._result = {
+            "name": name or "Usuario",
+            "key": key,
+            "vault": vault,
+            "tts": self.tts_check.isChecked() if self.tts_check else None,
+            "mic_id": self.mic_combo.currentData() if self.mic_combo else None,
+        }
         self.accept()
 
-    def values(self):
-        return self._name, self._key, self._vault
+    def values(self) -> dict:
+        return self._result or {}
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -182,45 +229,49 @@ class OnboardingDialog(QDialog):
             event.accept()
 
 
-def _apply(settings, name, key, vault):
-    """Persiste en .env y actualiza los settings en memoria."""
-    _upsert_env({"USER_NAME": name, "GEMINI_API_KEY": key, "OBSIDIAN_VAULT_PATH": vault})
+def apply_config(settings, name, key, vault):
+    """Persiste perfil/conexion en .env y en los settings en memoria.
+
+    USER_PROFILE = name para que la nota de perfil de Obsidian se llame como el
+    usuario (corrige el bug del nodo 'Usuario').
+    """
+    _upsert_env({
+        "USER_NAME": name,
+        "USER_PROFILE": name,
+        "GEMINI_API_KEY": key,
+        "OBSIDIAN_VAULT_PATH": vault,
+    })
     settings.user_name = name
+    settings.user_profile = name
     settings.gemini_api_key = key
     settings.obsidian_vault_path = Path(vault)
 
 
 def ensure_configured(settings) -> bool:
-    """
-    Garantiza clave de Gemini + ruta de vault. Si faltan, abre el onboarding.
-    Devuelve True si la app puede continuar, False si se cancelo.
-    """
+    """Primer arranque: si falta clave o vault, abre el dialogo. True si continua."""
     if settings.gemini_api_key and settings.obsidian_vault_path:
         return True
-
     dialog = OnboardingDialog(
-        current_name=settings.user_name or "",
+        current_name=settings.user_name if settings.user_name != "Usuario" else "",
         current_key=settings.gemini_api_key or "",
         current_vault=str(settings.obsidian_vault_path or ""),
     )
     if dialog.exec() != QDialog.DialogCode.Accepted:
         return False
-
-    _apply(settings, *dialog.values())
+    v = dialog.values()
+    apply_config(settings, v["name"], v["key"], v["vault"])
     return True
 
 
 def open_config(settings) -> bool:
-    """
-    Abre el dialogo de configuracion SIEMPRE (desde la bandeja), prerelleno con
-    los valores actuales. Devuelve True si se guardo.
-    """
+    """Ajustes basicos desde la bandeja (sin micro/TTS)."""
     dialog = OnboardingDialog(
-        current_name=settings.user_name or "",
+        current_name=settings.user_name if settings.user_name != "Usuario" else "",
         current_key=settings.gemini_api_key or "",
         current_vault=str(settings.obsidian_vault_path or ""),
     )
     if dialog.exec() != QDialog.DialogCode.Accepted:
         return False
-    _apply(settings, *dialog.values())
+    v = dialog.values()
+    apply_config(settings, v["name"], v["key"], v["vault"])
     return True

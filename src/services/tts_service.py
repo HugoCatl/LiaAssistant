@@ -4,6 +4,7 @@ import asyncio
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 import edge_tts
 from config import settings
+from config.paths import runtime_file
 
 class TTSWorker(QThread):
     """
@@ -52,7 +53,7 @@ class TTSService(QObject):
         self.enabled = settings.tts_enabled
         self.worker = None
         # Definir la ruta del archivo MP3 temporal en el directorio raíz del proyecto
-        self.output_path = os.path.abspath("temp_response.mp3")
+        self.output_path = runtime_file("temp_response.mp3")
 
     def set_enabled(self, enabled: bool):
         """Activa o desactiva dinámicamente el servicio de voz."""

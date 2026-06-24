@@ -1,9 +1,10 @@
 import sys
 from PyQt6.QtWidgets import QApplication
 from dotenv import load_dotenv
+from config.paths import env_path
 
-# Load environmental variables from .env file
-load_dotenv()
+# Load environmental variables from .env file (app-data si esta empaquetado)
+load_dotenv(env_path())
 
 from config import settings
 

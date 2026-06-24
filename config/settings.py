@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from config.paths import env_path
 from typing import Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -10,7 +11,7 @@ class Settings(BaseSettings):
     Validates core paths and credentials needed for the assistant.
     """
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(env_path()),
         env_file_encoding="utf-8",
         extra="ignore"
     )
