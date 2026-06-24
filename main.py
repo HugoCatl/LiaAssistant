@@ -7,8 +7,10 @@ from config.paths import env_path
 load_dotenv(env_path())
 
 from config import settings
+from config.logging_setup import setup_logging
 
 def main():
+    setup_logging()
     print("[Main] Initializing LIA Assistant base environment...")
 
     # Initialize PyQt application
@@ -66,8 +68,4 @@ def main():
     mascot.show()
     splash.close()
 
-    # Start PyQt event loop
-    sys.exit(app.exec())
-
-if __name__ == "__main__":
-    main()
+    # Start PyQt event lo

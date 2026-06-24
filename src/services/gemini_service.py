@@ -1,3 +1,4 @@
+from datetime import datetime
 from PyQt6.QtCore import QThread, pyqtSignal
 from google import genai
 from google.genai import types
@@ -9,6 +10,7 @@ from src.storage.obsidian_manager import (
 )
 from src.services.daily_summary import get_todays_activity
 from src.services.topic_clusters import get_note_clusters
+from src.services.reminders import crear_recordatorio, listar_recordatorios
 
 # Map tool names to python functions for execution inside workers
 TOOL_MAP = {
@@ -22,7 +24,9 @@ TOOL_MAP = {
     "write_note": write_note,
     "append_to_note": append_to_note,
     "get_clipboard_content": get_clipboard_content,
-    "set_clipboard_content": set_clipboard_content
+    "set_clipboard_content": set_clipboard_content,
+    "crear_recordatorio": crear_recordatorio,
+    "listar_recordatorios": listar_recordatorios,
 }
 
 class GeminiWorker(QThread):
@@ -55,7 +59,8 @@ class GeminiWorker(QThread):
             tools_list = [
                 open_application, create_note, read_note, search_notes, search_notes_semantic,
                 get_todays_activity, get_note_clusters, write_note, append_to_note,
-                get_clipboard_content, set_clipboard_content
+                get_clipboard_content, set_clipboard_content,
+                crear_recordatorio, listar_recordatorios,
             ]
 
             system_instruction = (
@@ -68,6 +73,7 @@ class GeminiWorker(QThread):
                 "Siempre que te pregunten sobre algún proyecto, concepto, tarea o información del usuario, busca en su memoria antes de responder: usa `search_notes_semantic` para preguntas abiertas o conceptuales (temas, ideas, 'qué sé sobre...'), `search_notes` para palabras o títulos exactos, y `read_note` si conoces el nombre de la nota.\n"
                 "Si el usuario pide un resumen de su día, un diario o un repaso de lo que hizo: llama a `get_todays_activity`, y con esos datos redacta un resumen estructurado (temas, logros, ideas y conexiones con notas anteriores) que guardas con `create_note` titulada 'Diario AAAA-MM-DD' (fecha de hoy) enlazada al perfil. Confírmalo de forma cálida y cotidiana.\n"
                 "Si pregunta qué temas tiene, en qué se repite, o quiere descubrir/organizar patrones en sus notas, usa `get_note_clusters` y preséntale los temas de forma natural.\n"
+                f"Fecha y hora actuales: {datetime.now().strftime('%Y-%m-%d %H:%M')}. Para recordatorios con hora usa `crear_recordatorio` con `fecha_hora` 'YYYY-MM-DD HH:MM' (o `en_minutos`); usa `listar_recordatorios` para consultarlos.\n"
                 "Si necesitas llamar a una función/herramienta, hazlo directamente sin generar texto explicativo en ese turno. Genera tu respuesta de texto únicamente cuando ya tengas todos los resultados de las herramientas.\n"
                 f"En el contenido de los archivos creados/editados (NUNCA en tu respuesta), debes enlazar obligatoriamente al perfil usando la sintaxis `[[{settings.user_profile}]]` y, a su vez, enlazar desde la nota de perfil `{settings.user_profile}` a la nueva nota temática usando `[[Nombre Nota]]` (enlace bidireccional obligatorio con corchetes dobles).\n"
                 "Genera etiquetas (tags) sin '#' al crear/editar notas, combinando: (1) TEMAS (ej: profesional, tareas, ia, estudios) y (2) ENTIDADES concretas mencionadas con prefijo jerárquico — personas como `persona/Nombre`, proyectos como `proyecto/Nombre`, lugares como `lugar/Sitio`. Sin espacios ni acentos raros; usa solo las entidades realmente relevantes de la nota.\n"
@@ -198,7 +204,8 @@ class GeminiReasoningWorker(QThread):
             tools_list = [
                 open_application, create_note, read_note, search_notes, search_notes_semantic,
                 get_todays_activity, get_note_clusters, write_note, append_to_note,
-                get_clipboard_content, set_clipboard_content
+                get_clipboard_content, set_clipboard_content,
+                crear_recordatorio, listar_recordatorios,
             ]
 
             system_instruction = (
@@ -211,6 +218,7 @@ class GeminiReasoningWorker(QThread):
                 "Siempre que te pregunten sobre algún proyecto, concepto, tarea o información del usuario, busca en su memoria antes de responder: usa `search_notes_semantic` para preguntas abiertas o conceptuales (temas, ideas, 'qué sé sobre...'), `search_notes` para palabras o títulos exactos, y `read_note` si conoces el nombre de la nota.\n"
                 "Si el usuario pide un resumen de su día, un diario o un repaso: llama a `get_todays_activity` y, con esos datos, redacta un resumen estructurado y reflexivo (temas, logros, ideas y conexiones con notas anteriores) que guardas con `create_note` titulada 'Diario AAAA-MM-DD' (fecha de hoy) enlazada al perfil. Confírmalo de forma cálida.\n"
                 "Si pregunta qué temas tiene, en qué se repite, o quiere descubrir/organizar patrones en sus notas, usa `get_note_clusters` y preséntale los temas con una breve reflexión.\n"
+                f"Fecha y hora actuales: {datetime.now().strftime('%Y-%m-%d %H:%M')}. Para recordatorios con hora usa `crear_recordatorio` con `fecha_hora` 'YYYY-MM-DD HH:MM' (o `en_minutos`); usa `listar_recordatorios` para consultarlos.\n"
                 "Si necesitas llamar a una función/herramienta, hazlo directamente sin generar texto explicativo en ese turno. Genera tu respuesta de texto únicamente cuando ya tengas todos los resultados de las herramientas.\n"
                 f"En el contenido de los archivos creados/editados (NUNCA en tu respuesta), debes enlazar obligatoriamente al perfil usando la sintaxis `[[{settings.user_profile}]]` y, a su vez, enlazar desde la nota de perfil `{settings.user_profile}` a la nueva nota temática usando `[[Nombre Nota]]` (enlace bidireccional obligatorio con corchetes dobles).\n"
                 "Genera etiquetas (tags) sin '#' al crear/editar notas, combinando: (1) TEMAS (ej: profesional, tareas, ia, estudios) y (2) ENTIDADES concretas mencionadas con prefijo jerárquico — personas como `persona/Nombre`, proyectos como `proyecto/Nombre`, lugares como `lugar/Sitio`. Sin espacios ni acentos raros; usa solo las entidades realmente relevantes de la nota.\n"

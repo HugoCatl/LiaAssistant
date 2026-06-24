@@ -1,4 +1,5 @@
 import os
+import logging
 from typing import TYPE_CHECKING
 import sounddevice as sd
 from PyQt6.QtCore import QObject, QUrl, QTimer
@@ -15,6 +16,9 @@ from src.services.proactive_engine import ProactiveEngine
 from src.gui.components.mascot_bubble import MascotBubble
 from src.gui import styles
 from config.paths import runtime_file
+from config.logging_setup import friendly_error
+from src.services.reminder_service import ReminderService
+from src.services import conversation_store
 
 if TYPE_CHECKING:
     from src.gui.view import View
@@ -82,6 +86,10 @@ class Orchestrator(QObject):
         self.proactive_engine = None
         self.bubble = None
         self._pending_suggestion = ("", False)  # (prefill, auto_submit)
+
+        # Recordatorios con hora -> aviso en la burbuja de la mascota
+        self.reminder_service = ReminderService()
+        self.reminder_service.reminder_due.connect(self.on_reminder_due)
 
         if self.mascot is not None and settings.proactive_enabled:
             debug = settings.proactive_debug
@@ -198,7 +206,8 @@ class Orchestrator(QObject):
         # En modo debug, lanza una sugerencia de ejemplo a los 4s para ver el flujo
         if self.proactive_engine is not None and settings.proactive_debug:
             QTimer.singleShot(4000, self._show_demo_suggestion)
-        self.show_welcome_greeting()
+        self.reminder_service.start()
+        self._restore_history()
         print("[Orchestrator] Sistema de LIA Assistant iniciado.")
         print("[Orchestrator] Presione 'Shift_L + L' globalmente para mostrar/ocultar el panel.")
 
@@ -371,10 +380,12 @@ class Orchestrator(QObject):
         self._pending_meta = (prompt_tokens, candidate_tokens, total_tokens)
 
     def on_error_occurred(self, err_msg: str):
-        """Displays errors on the output panel."""
+        """Registra el error y muestra un mensaje humano en el panel."""
+        logging.getLogger("lia").error("Error en worker: %s", err_msg)
+        friendly = friendly_error(err_msg)
         cursor = self.view.output_display.textCursor()
         cursor.movePosition(cursor.MoveOperation.End)
-        cursor.insertHtml(f"<br/><span style='color: #F87171;'><b>Error:</b> {err_msg}</span><br/>")
+        cursor.insertHtml(f"<br/><span style='color: {styles.DANGER};'>{friendly}</span><br/>")
         self.view.output_display.ensureCursorVisible()
 
     def _trim_history(self, contents, max_items: int = 16):
@@ -391,8 +402,60 @@ class Orchestrator(QObject):
     def reset_conversation(self):
         """Empieza una conversación nueva: olvida el historial y limpia el panel."""
         self.history = []
+        conversation_store.clear()
         self.view.output_display.clear()
         self.show_welcome_greeting()
+
+    def _history_to_turns(self, contents):
+        """Serializa la conversación a [{role, text}] (ignora llamadas a herramientas)."""
+        turns = []
+        for c in contents:
+            role = getattr(c, "role", None)
+            if role not in ("user", "model"):
+                continue
+            text = "".join(getattr(part, "text", "") or "" for part in getattr(c, "parts", []))
+            if text.strip():
+                turns.append({"role": role, "text": text})
+        return turns
+
+    def _restore_history(self):
+        """Recupera la conversación anterior (si existe) en memoria y en pantalla."""
+        turns = conversation_store.load_turns()
+        if not turns:
+            self.show_welcome_greeting()
+            return
+        from google.genai import types
+        self.history = [
+            types.Content(role=t["role"], parts=[types.Part.from_text(text=t["text"])])
+            for t in turns
+        ]
+        self._render_saved_history(turns)
+
+    def _render_saved_history(self, turns):
+        """Pinta los turnos recuperados en el panel (Lia con Markdown renderizado)."""
+        import html as _html
+        from src.gui.md_render import markdown_to_html
+        blocks = []
+        for t in turns:
+            if t["role"] == "user":
+                blocks.append(
+                    f"<p><b style='color:{styles.ACCENT_BRIGHT}'>Tú:</b> "
+                    f"<span style='color:{styles.TEXT}'>{_html.escape(t['text'])}</span></p>")
+            else:
+                blocks.append(
+                    f"<p><b style='color:{styles.ACCENT_BRIGHT}'>LIA:</b> {markdown_to_html(t['text'])}</p>")
+        self.view.output_display.setHtml("".join(blocks))
+
+    def on_reminder_due(self, texto: str):
+        """Un recordatorio vencido: avisa con la burbuja de la mascota."""
+        logging.getLogger("lia").info("Recordatorio vencido: %s", texto)
+        if self.mascot is None:
+            return
+        if self.bubble is None:
+            self.bubble = MascotBubble()
+        from src.gui.mascot_behavior import MascotMood
+        self.mascot.set_mood(MascotMood.REMINDER)
+        self.bubble.show_message(f"⏰ Recordatorio: {texto}", self.mascot, with_actions=False)
 
     def quit_app(self):
         """Cierra LIA por completo: detiene los hilos de fondo y mata el proceso."""
@@ -404,6 +467,10 @@ class Orchestrator(QObject):
         try:
             if self.system_monitor is not None:
                 self.system_monitor.stop()
+        except Exception:
+            pass
+        try:
+            self.reminder_service.stop()
         except Exception:
             pass
         try:
@@ -443,6 +510,7 @@ class Orchestrator(QObject):
         # Conserva la conversación actualizada (memoria entre turnos), acotada
         if self.worker and getattr(self.worker, "result_contents", None):
             self.history = self._trim_history(self.worker.result_contents)
+            conversation_store.save_turns(self._history_to_turns(self.history))
 
         # Safely mark QThread for garbage collection
         if self.worker:
@@ -578,6 +646,7 @@ class Orchestrator(QObject):
 
     def on_audio_error(self, err_msg: str):
         """Displays audio errors on UI and resets state."""
+        logging.getLogger("lia").warning("Error de audio: %s", err_msg)
         self.view.set_recording_active(False)
         self.state_manager.set_state(AssistantState.IDLE)
 
