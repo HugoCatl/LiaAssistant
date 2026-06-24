@@ -67,9 +67,11 @@ class Orchestrator(QObject):
         self.audio_recorder.recording_stopped.connect(self.on_recording_stopped)
         self.audio_recorder.error_occurred.connect(self.on_audio_error)
 
-        # Wire the desktop mascot: clicking it toggles the panel
+        # Wire the desktop mascot: un clic = hablar (abre panel + graba voz),
+        # doble clic = abrir/cerrar el panel sin grabar.
         if self.mascot is not None:
-            self.mascot.clicked.connect(self.toggle_ui)
+            self.mascot.clicked.connect(self.on_orb_click)
+            self.mascot.double_clicked.connect(self.toggle_ui)
 
         # --- Sistema proactivo (Fase 2): solo activo si hay mascota en escritorio ---
         self.system_monitor = None
@@ -191,6 +193,19 @@ class Orchestrator(QObject):
         self.show_welcome_greeting()
         print("[Orchestrator] Sistema de LIA Assistant iniciado.")
         print("[Orchestrator] Presione 'Shift_L + L' globalmente para mostrar/ocultar el panel.")
+
+    def on_orb_click(self):
+        """Un clic en la bolita: abre el panel (si está oculto) y empieza a escuchar."""
+        if not self.view.isVisible():
+            self.view.show()
+            self.view.raise_()
+            self.view.activateWindow()
+            self.show_welcome_greeting()
+        # Empezar a grabar voz si no hay una consulta en curso ni grabación activa
+        if (self.worker and self.worker.isRunning()) or self.audio_recorder.isRunning():
+            self.view.input_field.setFocus()
+            return
+        self.toggle_recording()
 
     def toggle_ui(self):
         """Toggles the visibility of the frameless UI overlay window."""

@@ -4,6 +4,7 @@ from PyQt6.QtGui import QColor, QIcon, QPixmap, QPainter, QPainterPath, QPen, QB
 
 from src.gui.components.input_field import InputField
 from src.gui.components.output_display import OutputDisplay
+from src.gui import styles
 from src.core.state_manager import AssistantState
 
 def parse_color(color_str: str) -> QColor:
@@ -212,14 +213,8 @@ class View(QWidget):
 
         # Main glassmorphic card container (violet/purple tone)
         self.card = QFrame(self)
-        self.card.setObjectName("MainCard")
-        self.card.setStyleSheet("""
-            QFrame#MainCard {
-                background-color: rgba(22, 16, 28, 0.88);
-                border: 1px solid rgba(192, 132, 252, 0.32);
-                border-radius: 16px;
-            }
-        """)
+        self.card.setObjectName("GlassCard")
+        self.card.setStyleSheet(styles.card_style())
 
         # Glow effect (Purple drop shadow)
         shadow = QGraphicsDropShadowEffect(self)

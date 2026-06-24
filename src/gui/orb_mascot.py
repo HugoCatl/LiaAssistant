@@ -30,10 +30,12 @@ class OrbMascot(MascotBehaviorMixin, QWidget):
     - Núcleo con degradado radial (esfera con profundidad).
     - Halo cónico que rota lentamente (el elemento hipnótico).
     - Respiración continua y efectos por estado (ondas, spinner, anillos).
-    - Click -> abre el panel. Arrastre -> mover (con snap al borde).
+    - Clic -> escuchar (abre panel y graba voz). Doble clic -> abrir/cerrar panel.
+      Arrastre -> mover (con snap al borde).
     """
 
     clicked = pyqtSignal()
+    double_clicked = pyqtSignal()
 
     WIDGET_W = 92
     WIDGET_H = 92
@@ -58,7 +60,7 @@ class OrbMascot(MascotBehaviorMixin, QWidget):
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFixedSize(self.WIDGET_W, self.WIDGET_H)
-        self.setToolTip("Lia — clic para abrir, arrastra para mover")
+        self.setToolTip("Lia — clic para hablar, doble clic para el panel, arrastra para mover")
 
     def _init_timer(self):
         self._timer = QTimer(self)
@@ -206,6 +208,4 @@ class OrbMascot(MascotBehaviorMixin, QWidget):
         p.drawEllipse(QPointF(x, y), 9, 9)
         # punto sólido
         p.setBrush(QBrush(QColor("#FFFFFF")))
-        p.drawEllipse(QPointF(x, y), 5.2, 5.2)
-        p.setBrush(QBrush(accent))
-        p.drawEllipse(QPointF(x, y), 3.4, 3.4)
+        p

@@ -5,6 +5,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor
 
+from src.gui import styles
+
 
 class MascotBubble(QWidget):
     """
@@ -47,14 +49,8 @@ class MascotBubble(QWidget):
         root.setContentsMargins(12, 12, 12, 12)
 
         self.card = QFrame(self)
-        self.card.setObjectName("BubbleCard")
-        self.card.setStyleSheet("""
-            QFrame#BubbleCard {
-                background-color: rgba(22, 16, 28, 0.94);
-                border: 1px solid rgba(192, 132, 252, 0.35);
-                border-radius: 14px;
-            }
-        """)
+        self.card.setObjectName("GlassCard")
+        self.card.setStyleSheet(styles.card_style(radius=14))
         shadow = QGraphicsDropShadowEffect(self)
         shadow.setBlurRadius(22)
         shadow.setColor(QColor(192, 132, 252, 70))
@@ -83,49 +79,18 @@ class MascotBubble(QWidget):
 
         self.no_button = QPushButton("Ahora no", self.card)
         self.no_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.no_button.setStyleSheet(self._secondary_btn_style())
+        self.no_button.setStyleSheet(styles.secondary_button_style())
         self.no_button.clicked.connect(self._on_dismiss)
         self.button_row.addWidget(self.no_button)
 
         self.yes_button = QPushButton("Sí", self.card)
         self.yes_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.yes_button.setStyleSheet(self._primary_btn_style())
+        self.yes_button.setStyleSheet(styles.primary_button_style())
         self.yes_button.clicked.connect(self._on_accept)
         self.button_row.addWidget(self.yes_button)
 
         card_layout.addLayout(self.button_row)
         root.addWidget(self.card)
-
-    def _primary_btn_style(self) -> str:
-        return """
-            QPushButton {
-                background-color: rgba(192, 132, 252, 0.22);
-                border: 1px solid rgba(192, 132, 252, 0.55);
-                border-radius: 9px;
-                color: #E9D5FF;
-                font-size: 12px;
-                font-weight: 600;
-                padding: 5px 16px;
-            }
-            QPushButton:hover { background-color: rgba(192, 132, 252, 0.38); }
-            QPushButton:pressed { background-color: rgba(192, 132, 252, 0.5); }
-        """
-
-    def _secondary_btn_style(self) -> str:
-        return """
-            QPushButton {
-                background: transparent;
-                border: 1px solid rgba(255, 255, 255, 0.18);
-                border-radius: 9px;
-                color: rgba(255, 255, 255, 0.6);
-                font-size: 12px;
-                padding: 5px 12px;
-            }
-            QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.08);
-                color: #F1F5F9;
-            }
-        """
 
     # --------------------------------------------------------------- public API
 

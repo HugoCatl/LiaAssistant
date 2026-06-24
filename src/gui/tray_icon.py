@@ -57,11 +57,19 @@ def make_tray(app, orchestrator) -> QSystemTrayIcon:
     tray = QSystemTrayIcon(_make_orb_icon(), app)
     tray.setToolTip("LIA Assistant")
 
+    def _open_config():
+        from config import settings
+        from src.gui.onboarding import open_config
+        open_config(settings)
+
     menu = QMenu()
     menu.setStyleSheet(_MENU_STYLE)
 
     show_action = menu.addAction("Mostrar / Ocultar Lia")
     show_action.triggered.connect(orchestrator.toggle_ui)
+
+    config_action = menu.addAction("Configurar…")
+    config_action.triggered.connect(_open_config)
 
     menu.addSeparator()
 
@@ -70,11 +78,4 @@ def make_tray(app, orchestrator) -> QSystemTrayIcon:
 
     tray.setContextMenu(menu)
 
-    # Clic normal sobre el icono = mostrar/ocultar el panel
-    def _on_activated(reason):
-        if reason == QSystemTrayIcon.ActivationReason.Trigger:
-            orchestrator.toggle_ui()
-
-    tray.activated.connect(_on_activated)
-    tray.show()
-    return tray
+    # Clic normal sob
