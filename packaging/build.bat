@@ -1,30 +1,38 @@
 @echo off
 REM ============================================================
-REM  Empaqueta LIA en un unico LIA.exe (onefile, sin consola).
-REM  Ejecutalo en Windows, idealmente con el venv del proyecto activado:
-REM      .\venv\Scripts\activate
-REM      packaging\build.bat
+REM  Construye LIA.exe (onefile, sin consola) y lo copia a Descargas.
+REM  Basta con hacer DOBLE CLIC en este archivo.
 REM ============================================================
-cd /d "%~dp0"
+setlocal
+cd /d "%~dp0\.."
 
-echo [1/3] Instalando herramientas de empaquetado...
+echo [1/5] Activando entorno virtual (si existe)...
+if exist "venv\Scripts\activate.bat" (
+    call "venv\Scripts\activate.bat"
+) else (
+    echo   No hay venv; se usara el Python del sistema.
+)
+
+echo [2/5] Instalando herramientas de empaquetado...
 python -m pip install --upgrade pyinstaller pillow || goto :error
 
-echo [2/3] Generando icono...
-python make_icon.py || goto :error
+echo [3/5] Generando icono...
+python packaging\make_icon.py || goto :error
 
-echo [3/3] Construyendo LIA.exe...
-pyinstaller --noconfirm --clean lia.spec || goto :error
+echo [4/5] Construyendo LIA.exe (esto tarda unos minutos)...
+pyinstaller --noconfirm --clean packaging\lia.spec || goto :error
+
+echo [5/6] Copiando a Descargas...
+set "DEST=%USERPROFILE%\Downloads"
+copy /Y "dist\LIA.exe" "%DEST%\LIA.exe" >nul || goto :error
+
+echo [6/6] Creando acceso directo en el Escritorio...
+powershell -NoProfile -ExecutionPolicy Bypass -File "packaging\install_shortcuts.ps1" -Exe "%DEST%\LIA.exe"
 
 echo.
 echo ============================================================
-echo  Listo. El ejecutable esta en:  packaging\dist\LIA.exe
-echo ============================================================
-pause
-exit /b 0
-
-:error
-echo.
-echo  ERROR durante el empaquetado. Revisa los mensajes de arriba.
-pause
-exit /b 1
+echo  LISTO.
+echo   - LIA.exe en:  %DEST%\LIA.exe
+echo   - Acceso directo en el Escritorio.
+echo   - Para abrir LIA al encender el PC: doble clic en
+echo     packaging\ac

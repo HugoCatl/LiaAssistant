@@ -6,13 +6,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from config import settings
-from src.core import StateManager, Orchestrator
-from src.gui import View
-from src.gui.mascot_factory import make_mascot
-from src.gui.onboarding import ensure_configured
-from src.gui.tray_icon import make_tray
-from src.io import KeyboardListener
-from src.services.tts_service import TTSService
 
 def main():
     print("[Main] Initializing LIA Assistant base environment...")
@@ -26,17 +19,33 @@ def main():
 
     # Onboarding: si falta clave de Gemini o ruta del vault, pedirlas antes de
     # arrancar (en vez de reventar en silencio al primer mensaje).
+    from src.gui.onboarding import ensure_configured
     if not ensure_configured(settings):
         print("[Main] Configuracion incompleta. Saliendo.")
         return
 
-    # Instantiate the system components
+    # Pantalla de carga con barra (sin terminal). Cubre la carga de los modulos
+    # pesados (Whisper, embeddings, servicios), que es lo que tarda.
+    from src.gui.splash import LiaSplash
+    splash = LiaSplash()
+    splash.show()
+    app.processEvents()
+
+    splash.set_progress(20, "Cargando el nucleo…")
+    from src.core import StateManager, Orchestrator
+    from src.gui import View
+    from src.gui.mascot_factory import make_mascot
+    from src.gui.tray_icon import make_tray
+    from src.io import KeyboardListener
+    from src.services.tts_service import TTSService
+
+    splash.set_progress(55, "Preparando la interfaz…")
     state_manager = StateManager()
     view = View()
     mascot = make_mascot()  # orbe minimalista
     keyboard_listener = KeyboardListener()
 
-    # Orchestrate using the Mediator pattern
+    splash.set_progress(80, "Conectando servicios…")
     orchestrator = Orchestrator(view, state_manager, keyboard_listener, mascot=mascot)
 
     # Ensure background listener resources are released on exit
@@ -46,15 +55,15 @@ def main():
         app.aboutToQuit.connect(orchestrator.system_monitor.stop)
 
     # Icono de bandeja del sistema: permite mostrar/ocultar y SALIR de verdad.
-    # Guardamos la referencia para que no lo recoja el recolector de basura.
     tray = make_tray(app, orchestrator)
 
-    # Start the orchestrator (launches KeyboardListener thread)
+    splash.set_progress(100, "¡Listo!")
     orchestrator.start()
 
     # The mascot is the persistent desktop presence. The panel stays hidden
     # until the user clicks the mascot or presses the global hotkey.
     mascot.show()
+    splash.close()
 
     # Start PyQt event loop
     sys.exit(app.exec())
