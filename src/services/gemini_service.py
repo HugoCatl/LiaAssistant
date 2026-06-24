@@ -3,7 +3,10 @@ from google import genai
 from google.genai import types
 from config import settings
 from src.services.os_automation import open_application, get_clipboard_content, set_clipboard_content
-from src.storage.obsidian_manager import create_note, read_note, search_notes, write_note, append_to_note
+from src.storage.obsidian_manager import (
+    create_note, read_note, search_notes, search_notes_semantic,
+    write_note, append_to_note,
+)
 
 # Map tool names to python functions for execution inside workers
 TOOL_MAP = {
@@ -11,6 +14,7 @@ TOOL_MAP = {
     "create_note": create_note,
     "read_note": read_note,
     "search_notes": search_notes,
+    "search_notes_semantic": search_notes_semantic,
     "write_note": write_note,
     "append_to_note": append_to_note,
     "get_clipboard_content": get_clipboard_content,
@@ -43,8 +47,8 @@ class GeminiWorker(QThread):
         try:
             client = genai.Client(api_key=self.api_key)
             tools_list = [
-                open_application, create_note, read_note, search_notes, write_note, append_to_note,
-                get_clipboard_content, set_clipboard_content
+                open_application, create_note, read_note, search_notes, search_notes_semantic,
+                write_note, append_to_note, get_clipboard_content, set_clipboard_content
             ]
             
             system_instruction = (
@@ -54,7 +58,7 @@ class GeminiWorker(QThread):
                 "REGLA DE ORO: Nunca menciones Obsidian, archivos .md, notas, búsquedas, herramientas ni origen de datos en tus respuestas al usuario. Tampoco uses corchetes `[[Nota]]` en ellas. Confirma acciones de manera invisible y cotidiana.\n"
                 f"Asocia la información en primera persona expresada por el usuario al perfil de {settings.user_name} y guárdala en su nota de perfil (evita crear notas paralelas como 'Yo').\n"
                 "Antes de guardar, busca notas con `search_notes`. Si existen, actualízalas con `write_note` o `append_to_note` para no duplicar.\n"
-                "Siempre que te pregunten sobre algún proyecto, concepto, tarea o información del usuario, utiliza `search_notes` o `read_note` antes de responder para buscar en su memoria.\n"
+                "Siempre que te pregunten sobre algún proyecto, concepto, tarea o información del usuario, busca en su memoria antes de responder: usa `search_notes_semantic` para preguntas abiertas o conceptuales (temas, ideas, 'qué sé sobre...'), `search_notes` para palabras o títulos exactos, y `read_note` si conoces el nombre de la nota.\n"
                 "Si necesitas llamar a una función/herramienta, hazlo directamente sin generar texto explicativo en ese turno. Genera tu respuesta de texto únicamente cuando ya tengas todos los resultados de las herramientas.\n"
                 f"En el contenido de los archivos creados/editados (NUNCA en tu respuesta), debes enlazar obligatoriamente al perfil usando la sintaxis `[[{settings.user_profile}]]` y, a su vez, enlazar desde la nota de perfil `{settings.user_profile}` a la nueva nota temática usando `[[Nombre Nota]]` (enlace bidireccional obligatorio con corchetes dobles).\n"
                 "Genera etiquetas (tags) lógicas sin '#' al crear/editar notas (ej: profesional, tareas, ia, estudios).\n"
@@ -177,8 +181,8 @@ class GeminiReasoningWorker(QThread):
         try:
             client = genai.Client(api_key=self.api_key)
             tools_list = [
-                open_application, create_note, read_note, search_notes, write_note, append_to_note,
-                get_clipboard_content, set_clipboard_content
+                open_application, create_note, read_note, search_notes, search_notes_semantic,
+                write_note, append_to_note, get_clipboard_content, set_clipboard_content
             ]
             
             system_instruction = (
@@ -188,7 +192,7 @@ class GeminiReasoningWorker(QThread):
                 "REGLA DE ORO: Nunca menciones Obsidian, archivos .md, notas, búsquedas, herramientas ni origen de datos en tus respuestas al usuario. Tampoco uses corchetes `[[Nota]]` en ellas. Integra la info de manera invisible como si la recordaras tú misma.\n"
                 f"Asocia la información en primera persona expresada por el usuario al perfil de {settings.user_name} y regístrala en su perfil (no crees notas 'Yo' o paralelas).\n"
                 "Antes de guardar, busca notas con `search_notes`. Si existen, actualízalas con `write_note` o `append_to_note` para evitar duplicados.\n"
-                "Siempre que te pregunten sobre algún proyecto, concepto, tarea o información del usuario, utiliza `search_notes` o `read_note` antes de responder para buscar en su memoria.\n"
+                "Siempre que te pregunten sobre algún proyecto, concepto, tarea o información del usuario, busca en su memoria antes de responder: usa `search_notes_semantic` para preguntas abiertas o conceptuales (temas, ideas, 'qué sé sobre...'), `search_notes` para palabras o títulos exactos, y `read_note` si conoces el nombre de la nota.\n"
                 "Si necesitas llamar a una función/herramienta, hazlo directamente sin generar texto explicativo en ese turno. Genera tu respuesta de texto únicamente cuando ya tengas todos los resultados de las herramientas.\n"
                 f"En el contenido de los archivos creados/editados (NUNCA en tu respuesta), debes enlazar obligatoriamente al perfil usando la sintaxis `[[{settings.user_profile}]]` y, a su vez, enlazar desde la nota de perfil `{settings.user_profile}` a la nueva nota temática usando `[[Nombre Nota]]` (enlace bidireccional obligatorio con corchetes dobles).\n"
                 "Genera etiquetas (tags) lógicas sin '#' al crear/editar notas (ej: profesional, tareas, ia, estudios).\n"

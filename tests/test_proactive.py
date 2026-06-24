@@ -1,6 +1,20 @@
 """Tests del motor proactivo (Fase 2) y los helpers del monitor de sistema."""
+import os
+import tempfile
+import pytest
+
+import src.services.proactive_engine as _pe_mod
 from src.services.proactive_engine import ProactiveEngine, _looks_like_url, _short
 from src.services.system_monitor import get_active_window_title, get_idle_seconds
+from src.services.feedback_store import FeedbackStore
+
+
+@pytest.fixture(autouse=True)
+def _isolated_feedback_store(tmp_path, monkeypatch):
+    """Cada test usa un FeedbackStore aislado en tmp_path (no contamina datos reales)."""
+    db = str(tmp_path / "fb.db")
+    original = _pe_mod.FeedbackStore
+    monkeypatch.setattr(_pe_mod, "FeedbackStore", lambda: original(db))
 
 
 def _collect(engine):
@@ -97,12 +111,17 @@ def test_idle_note_rule_requires_presence():
 
 
 def test_dismiss_feedback_extends_cooldown():
+    """Tras una sugerencia emitida y rechazada, el cooldown global se refuerza."""
     eng = ProactiveEngine(global_cooldown_s=0)
     got = _collect(eng)
-    eng.global_cooldown_s = 300  # activa cooldown tras el rechazo
+    # Primera sugerencia: se emite y se asocia un _pending_label
+    eng.on_clipboard_changed("a" * 60)
+    assert len(got) == 1
+    # Rechazo → refuerza cooldown
+    eng.global_cooldown_s = 300
     eng.record_feedback(accepted=False)
-    eng.on_clipboard_changed("c" * 60)
-    assert got == []  # bloqueado por el cooldown reforzado
+    eng.on_clipboard_changed("b" * 60)
+    assert len(got) == 1  # la segunda queda bloqueada por el cooldown reforzado
 
 
 def test_note_activity_resets_idle_flag():

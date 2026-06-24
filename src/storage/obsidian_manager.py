@@ -5,6 +5,10 @@ from pathlib import Path
 from typing import Optional, List
 from config import settings
 
+# Índice semántico global (lazy-loaded en search_notes_semantic)
+_semantic_index = None
+_semantic_available = True  # Flag para saber si fastembed está disponible
+
 def sanitize_filename(title: str) -> str:
     """
     Limpia el título de la nota eliminando caracteres no válidos para nombres de archivo en Windows.
@@ -177,6 +181,56 @@ def search_notes(query: str) -> List[str]:
         return results
     except Exception as e:
         return [f"Error al realizar la búsqueda en Obsidian: {str(e)}"]
+
+def search_notes_semantic(query: str) -> List[str]:
+    """
+    Busca notas por SIGNIFICADO (no por palabra exacta) en la memoria del usuario.
+    Úsala cuando el usuario pregunte por temas, conceptos o ideas de forma abierta
+    (ej: "qué sé sobre productividad", "ideas relacionadas con mi proyecto"),
+    ya que encuentra notas relevantes aunque no contengan las palabras exactas.
+
+    Args:
+        query: La consulta o tema a buscar conceptualmente.
+
+    Returns:
+        Una lista de notas relevantes ordenadas por cercanía semántica, con un
+        fragmento de cada una.
+    """
+    global _semantic_index, _semantic_available
+
+    # Si fastembed no está disponible, recurrimos a la búsqueda por palabra clave
+    if not _semantic_available:
+        return search_notes(query)
+
+    try:
+        if _semantic_index is None:
+            from src.services.semantic_index import SemanticIndex, FastEmbedEmbedder
+            vault = get_vault_path()
+            _semantic_index = SemanticIndex(vault, FastEmbedEmbedder())
+
+        results = _semantic_index.search(query, top_k=5)
+        if not results:
+            return ["No se encontraron notas relevantes en la memoria."]
+
+        formatted = []
+        for r in results:
+            # Umbral calibrado para paraphrase-multilingual-MiniLM (coseno ~0.3+ ya es relevante)
+            if r["score"] < 0.30:
+                continue
+            formatted.append(f"Nota: '{r['title']}' (relevancia {r['score']:.0%}) - {r['snippet']}")
+
+        if not formatted:
+            return ["No se encontraron notas suficientemente relevantes en la memoria."]
+        return formatted
+
+    except ImportError:
+        # fastembed no instalado: desactivar para futuras llamadas y usar keyword
+        _semantic_available = False
+        return search_notes(query)
+    except Exception as e:
+        # Cualquier otro fallo: degradar a búsqueda por palabra clave
+        return search_notes(query)
+
 
 def write_note(title: str, content: str, tags: Optional[List[str]] = None) -> str:
     """

@@ -84,7 +84,7 @@ class Orchestrator(QObject):
             if debug:
                 self.proactive_engine = ProactiveEngine(
                     global_cooldown_s=8.0, note_gap_s=30.0,
-                    focus_gap_s=30.0, eod_hour=0,
+                    focus_gap_s=30.0, eod_hour=0, debug=True,
                 )
                 print("[Orchestrator] Sistema proactivo en MODO DEBUG (tiempos cortos).")
             else:

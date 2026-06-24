@@ -12,8 +12,8 @@ import re
 import json
 import numpy as np
 
-# Modelo multilingüe pequeño (funciona bien en español). ONNX vía fastembed.
-DEFAULT_MODEL = "intfloat/multilingual-e5-small"
+# Modelo multilingüe ligero (excelente en español, 384 dim, ~0.22GB). ONNX vía fastembed.
+DEFAULT_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 _FRONTMATTER_RE = re.compile(r"^---\n.*?\n---\n", re.DOTALL)
 
@@ -41,10 +41,8 @@ class FastEmbedEmbedder:
 
     def embed(self, texts, is_query: bool = False) -> np.ndarray:
         self._ensure()
-        # Los modelos e5 rinden mejor con prefijos query:/passage:
-        prefix = "query: " if is_query else "passage: "
-        prepared = [prefix + t for t in texts]
-        vectors = list(self._model.embed(prepared))
+        # El modelo paraphrase-multilingual no requiere prefijos query:/passage:
+        vectors = list(self._model.embed(list(texts)))
         return np.asarray(vectors, dtype=np.float32)
 
 
@@ -171,9 +169,9 @@ class SemanticIndex:
 
     def search(self, query: str, top_k: int = 5):
         """Devuelve las notas más cercanas semánticamente: [{title, score, snippet}]."""
-        self._load_cache()
-        if self._vectors is None or not len(self._meta):
-            self.build()
+        # Build incremental en cada búsqueda: barato si nada cambió (solo stats de
+        # mtime + reutiliza vectores), y mantiene el índice fresco ante notas nuevas.
+        self.build()
         if self._vectors is None or not len(self._meta):
             return []
 

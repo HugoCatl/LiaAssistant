@@ -1,122 +1,148 @@
-# ✧ LIA Assistant - Asistente Personal y Segundo Cerebro Autónomo
+# ✧ LIA Assistant — Asistente Personal y Segundo Cerebro Autónomo
 
-LIA es un asistente virtual de escritorio nativo de Windows, de alto rendimiento y baja latencia, diseñado para servir como el puente de captura para tu **Segundo Cerebro (Second Brain)**. Se ejecuta como un demonio en segundo plano y se activa de forma instantánea mediante un atajo global de teclado para registrar, organizar y conectar tu vida profesional y personal directamente en tu bóveda local de Obsidian.
+LIA es un asistente virtual de escritorio nativo de Windows, de alto rendimiento y baja latencia, diseñado como el puente de captura para tu **Segundo Cerebro (Second Brain)**. Se ejecuta como un demonio en segundo plano, vive en el escritorio como un **orbe minimalista** y se activa al instante con un atajo global para registrar, organizar y **conectar por significado** tu vida profesional y personal en tu bóveda local de Obsidian.
 
----
-
-## 💡 Propósito Principal
-
-El núcleo de LIA es la **construcción automatizada de tu gráfico de conocimiento**. Cada vez que registras una tarea, proyecto de IA, tema de estudio, hobby, nota de amigos o credenciales, LIA analiza la información, crea o actualiza las notas correspondientes en Obsidian y las **vincula bidireccionalmente** mediante corchetes dobles (`[[Nota]]`) al perfil principal (por ejemplo, `[[TuNombre]]`). Con el tiempo, tu gráfico de relaciones en Obsidian se dibuja solo, permitiéndote navegar visualmente por tus pensamientos y proyectos sin esfuerzo de organización manual.
+> 📄 ¿Buscas el detalle técnico? Lee **[ARQUITECTURA.md](ARQUITECTURA.md)** — qué tecnología se usa y qué hace cada cosa.
 
 ---
 
-## 🛠️ Arquitectura y Estructura del Proyecto
+## 💡 Propósito principal
 
-El código está organizado modularmente siguiendo el principio de Separación de Concernimientos (Separation of Concerns):
+El núcleo de LIA es la **construcción automatizada de tu grafo de conocimiento**. Cada vez que registras una idea, tarea, proyecto o nota, LIA analiza la información, crea o actualiza las notas en Obsidian y las **vincula bidireccionalmente** (`[[Nota]]`) a tu perfil principal. Con el tiempo, tu grafo se dibuja solo.
+
+A esto se suman tres capacidades que la convierten en algo más que un capturador:
+
+- 🟣 **Presencia viva (orbe)** que reacciona a su estado y te acompaña en el escritorio.
+- 🔔 **Recordatorios proactivos** que detectan cuándo merece la pena anotar algo.
+- 🧠 **Memoria semántica** que encuentra tus notas por *significado*, no por palabra exacta.
+
+---
+
+## ✨ Funcionalidades clave
+
+1. **Orbe minimalista state-reactive**: presencia elegante en una esquina (estilo Siri/Raycast), dibujada con gradientes animados. Late, gira y cambia de expresión según el estado (escuchando, pensando, hablando, recordando). Clic para abrir, arrastrar para mover.
+2. **Recordatorios proactivos inteligentes**: un motor observa el portapapeles, la ventana activa y tu inactividad y, sin interrumpir, sugiere capturar lo importante mediante una burbuja "Sí / Ahora no".
+3. **Aprendizaje del feedback (ML local)**: una regresión logística aprende de cada "Sí/Ahora no" y **silencia los patrones de recordatorio que rechazas**. Cuanto más la usas, menos molesta.
+4. **Búsqueda semántica del vault**: embeddings locales (ONNX) permiten preguntar *"¿qué sé sobre productividad?"* y encontrar notas que ni mencionan esa palabra. 100% local.
+5. **Captura por voz multimodal**: micrófono integrado con transcripción local asíncrona vía **Whisper**.
+6. **Visión de pantalla**: captura la pantalla como contexto visual para Gemini bajo demanda ("mira mi pantalla y resume…").
+7. **Vinculación bidireccional automática**: el grafo de Obsidian se autoorganiza con sintaxis `[[Nota]]`.
+8. **Enrutamiento Flash/Pro**: Gemini Flash para acción rápida; Gemini Pro reservado para razonamiento o mentoría compleja.
+9. **Respuesta por voz (TTS)**: confirmaciones habladas con Edge-TTS.
+10. **Automatización del SO**: abrir aplicaciones, leer/escribir el portapapeles.
+
+---
+
+## 🛠️ Estructura del proyecto
 
 ```plaintext
 LiaAssistant/
 │
-├── config/                         # Gestión de variables de entorno y perfiles
-│   ├── __init__.py
-│   └── settings.py                 # Validación con Pydantic-Settings
+├── config/
+│   └── settings.py              # Configuración validada con Pydantic-Settings (.env)
 │
-├── src/                            # Código fuente de la aplicación
-│   ├── __init__.py
+├── src/
+│   ├── core/
+│   │   ├── orchestrator.py      # Patrón Mediator: coordina UI, estado, voz, proactividad
+│   │   └── state_manager.py     # Máquina de estados (Idle/Listening/Processing/Responding)
 │   │
-│   ├── core/                       # Núcleo lógico (Orquestador y Máquina de Estados)
-│   │   ├── __init__.py
-│   │   ├── orchestrator.py         # Patrón Mediator. Coordina la UI, Eventos y Estado
-│   │   └── state_manager.py        # Gestión del estado del asistente (Idle, Listening, Processing, Responding)
+│   ├── gui/                     # Capa de presentación (PyQt6)
+│   │   ├── view.py              # Panel glassmorphic translúcido sin marcos
+│   │   ├── orb_mascot.py        # Orbe minimalista (presencia por defecto)
+│   │   ├── live2d_mascot.py     # Personaje Live2D opcional (OpenGL transparente)
+│   │   ├── mascot.py            # Gato dibujado (legacy, opt-in)
+│   │   ├── mascot_behavior.py   # Mixin compartido: clic/arrastre/snap
+│   │   ├── mascot_factory.py    # Elige la presencia (orbe / Live2D / gato)
+│   │   └── components/          # Sub-widgets (input, output, burbuja proactiva)
 │   │
-│   ├── gui/                        # Capa de Presentación (Interfaz Gráfica)
-│   │   ├── __init__.py
-│   │   ├── components/             # Sub-widgets PyQt6 reutilizables
-│   │   │   ├── input_field.py      # Entrada de texto personalizada
-│   │   │   └── output_display.py   # Área de salida de texto para respuestas
-│   │   └── view.py                 # Ventana principal translúcida y sin marcos con diseño Glassmorphism
+│   ├── io/                      # Percepción de hardware
+│   │   ├── audio_recorder.py    # Captura de micrófono con VAD (hilo aparte)
+│   │   └── keyboard_listener.py # Atajo global (QThread + pynput)
 │   │
-│   ├── io/                         # Capa de Percepción e Interacción de Hardware
-│   │   ├── __init__.py
-│   │   ├── audio_recorder.py       # Captura de audio de micrófono en hilo secundario
-│   │   └── keyboard_listener.py    # Captura global de eventos de teclado (QThread + pynput)
+│   ├── services/               # Lógica de servicios (cloud y local)
+│   │   ├── gemini_service.py    # Workers asíncronos Flash/Pro con tool-calling
+│   │   ├── whisper_local.py     # Transcripción local (faster-whisper)
+│   │   ├── tts_service.py       # Síntesis de voz (Edge-TTS)
+│   │   ├── os_automation.py     # Abrir apps, portapapeles
+│   │   ├── system_monitor.py    # Vigila portapapeles, ventana activa, inactividad
+│   │   ├── proactive_engine.py  # Reglas + ML: decide CUÁNDO sugerir
+│   │   ├── relevance_scorer.py  # Regresión logística que aprende del feedback
+│   │   ├── feedback_store.py    # Persistencia del feedback (SQLite)
+│   │   ├── semantic_index.py    # Índice vectorial del vault (fastembed)
+│   │   └── semantic_search.py   # Herramienta search_notes_semantic
 │   │
-│   ├── services/                   # Proveedores de Servicios Externos y Locales
-│   │   ├── __init__.py
-│   │   ├── gemini_service.py       # Workers asíncronos para Gemini Flash y Pro
-│   │   ├── os_automation.py        # Automatización de Windows (abrir apps, etc.)
-│   │   └── whisper_local.py        # Transcripción local de audio con Whisper
-│   │
-│   └── storage/                    # Capa de Persistencia y Memoria
-│       ├── __init__.py
-│       └── obsidian_manager.py     # Gestor de lectura, escritura y búsqueda en el Vault local
+│   └── storage/
+│       └── obsidian_manager.py  # CRUD + búsqueda por palabra en el Vault
 │
-├── tests/                          # Suite de pruebas automatizadas
-│   ├── __init__.py
-│   ├── test_core.py                # Pruebas de configuración y máquina de estados
-│   ├── test_services.py            # Pruebas de automatización e integración de modelos
-│   └── test_storage.py             # Pruebas de lectura/escritura en Obsidian
+├── scripts/
+│   └── download_model.py        # Descarga de modelos Live2D (Cubism 2/3)
 │
-├── .env.example                    # Plantilla de variables de entorno
-├── requirements.txt                # Dependencias fijadas del proyecto
-└── main.py                         # Punto de entrada de la aplicación
+├── tests/                       # Suite pytest (núcleo, servicios, proactivo, ML, semántico…)
+├── docs/                        # Guías (validación de la Fase 2, etc.)
+├── .env.example
+├── requirements.txt
+└── main.py                      # Punto de entrada
 ```
 
 ---
 
-## ✨ Funcionalidades Clave
+## 🚀 Instalación y puesta en marcha
 
-1. **Interfaz Glassmorphic Fluida**: Ventana translúcida elegante sin bordes, con efectos de desenfoque y sombras de color purpura que se superpone a cualquier app.
-2. **Interacción Proactiva**: LIA te recibe dinámicamente con saludos motivadores cada vez que inicias o abres el panel (ej. *"¡Hola Usuario! ¿Qué idea se te ha ocurrido hoy? 💡"*), incitándote a registrar tus pensamientos.
-3. **Captura por Voz Multimodal**: Micrófono integrado y transcripción local asíncrona mediante **Whisper** para registrar notas simplemente hablando.
-4. **Vinculación Bidireccional Inteligente**: Auto-conexión de notas mediante sintaxis de doble corchete `[[Nota]]` para que el mapa relacional de Obsidian se autoorganice en segundo plano.
-5. **Enrutamiento y Ahorro de Tokens**:
-   - **Gemini Flash (Worker de Acción)**: Ejecuta rápidamente la captura de notas, edición en Obsidian y comandos de sistema.
-   - **Gemini Pro (Worker de Razonamiento)**: Reservado exclusivamente para peticiones explícitas de análisis a fondo o mentoría compleja.
-6. **Automatización del OS**: Capacidad de iniciar aplicaciones del sistema (`bloc de notas`, `calculadora`, `Paint 3D`, `Teams`, etc.) por comando directo.
+### 1. Requisitos
+* **Python 3.10 o superior**.
+* **Obsidian** con una bóveda local creada.
+* Una **API Key de Google Gemini** (gratis en Google AI Studio).
 
----
-
-## 🚀 Instalación y Puesta en Marcha
-
-### 1. Requisitos Previos
-* **Python 3.10 o superior** instalado en el sistema.
-* **Obsidian** instalado con una bóveda (vault) local creada (donde LIA creará y organizará tus notas).
-* Una API Key de **Google Gemini** (consigue una gratis en Google AI Studio).
-
-### 2. Configurar el Entorno
+### 2. Entorno
 ```bash
-# Crear y activar el entorno virtual
 python -m venv venv
 .\venv\Scripts\activate
-
-# Instalar dependencias
 pip install -r requirements.txt
 ```
 
-### 3. Configurar Variables de Entorno
-Copia el archivo `.env.example` a `.env` y rellena las claves correspondientes:
+### 3. Variables de entorno
+Copia `.env.example` a `.env` y rellena:
 ```env
 GEMINI_API_KEY=tu_clave_aqui
 GEMINI_MODEL=gemini-2.5-flash
 GEMINI_MODEL_REASONING=gemini-2.5-pro
-OBSIDIAN_VAULT_PATH=C:\LIAI
+OBSIDIAN_VAULT_PATH=C:\RutaDeTuVault
 WHISPER_MODEL_PATH=small
-DEBUG=True
+TTS_ENABLED=True
+USER_NAME=TuNombre
 ```
 
-### 4. Ejecutar la Aplicación
+### 4. Ejecutar
 ```bash
 python main.py
 ```
-* **Mostrar/Ocultar**: Presiona la combinación de teclas **`Shift_L + L`** de forma global desde cualquier ventana.
-* **Mover la Ventana**: Haz clic y arrastra con el botón izquierdo sobre el panel para reposicionar la ventana.
+* **Mostrar/Ocultar panel**: `Shift_L + L` de forma global.
+* **Abrir desde el orbe**: clic sobre el orbe; arrástralo para reposicionarlo.
 
 ---
 
-## 🧪 Pruebas Unitarias
+## ⚙️ Configuración opcional
 
-Para ejecutar el conjunto de pruebas unitarias:
+| Variable | Por defecto | Qué hace |
+| :--- | :--- | :--- |
+| `PROACTIVE_ENABLED` | `True` | Activa/desactiva los recordatorios proactivos. |
+| `LIA_PROACTIVE_DEBUG` | `False` | Tiempos en segundos + sugerencia demo al arrancar (ver [docs/validacion_fase2.md](docs/validacion_fase2.md)). |
+| `LIVE2D_MODEL_PATH` | *(vacío)* | Activa el modo personaje Live2D apuntando a un `.model3.json`/`.model.json`. |
+| `LIA_MASCOT` | *(vacío)* | `cat` para usar el gato dibujado (legacy) en lugar del orbe. |
+| `TTS_VOICE` | `es-ES-ElviraNeural` | Voz de Edge-TTS. |
+
+---
+
+## 🧪 Pruebas
+
 ```bash
 .\venv\Scripts\pytest tests/
 ```
+
+La suite cubre el núcleo, los servicios, el motor proactivo, el modelo de relevancia (ML) y la búsqueda semántica.
+
+---
+
+## 🔒 Privacidad
+
+La transcripción de voz (Whisper), la búsqueda semántica (embeddings) y el aprendizaje del feedback corren **100% en tu máquina**. Solo la conversación con el modelo de lenguaje (y, bajo demanda, una captura de pantalla) viaja a la API de Gemini — nunca tu vault completo. El histórico de feedback se guarda en SQLite local bajo `%LOCALAPPDATA%/LiaAssistant`.
