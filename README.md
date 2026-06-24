@@ -48,11 +48,9 @@ LiaAssistant/
 │   │
 │   ├── gui/                     # Capa de presentación (PyQt6)
 │   │   ├── view.py              # Panel glassmorphic translúcido sin marcos
-│   │   ├── orb_mascot.py        # Orbe minimalista (presencia por defecto)
-│   │   ├── live2d_mascot.py     # Personaje Live2D opcional (OpenGL transparente)
-│   │   ├── mascot.py            # Gato dibujado (legacy, opt-in)
-│   │   ├── mascot_behavior.py   # Mixin compartido: clic/arrastre/snap
-│   │   ├── mascot_factory.py    # Elige la presencia (orbe / Live2D / gato)
+│   │   ├── orb_mascot.py        # Orbe minimalista state-reactive (la presencia)
+│   │   ├── mascot_behavior.py   # Mixin: colocación, clic/arrastre, snap al borde
+│   │   ├── mascot_factory.py    # Construye la mascota
 │   │   └── components/          # Sub-widgets (input, output, burbuja proactiva)
 │   │
 │   ├── io/                      # Percepción de hardware
@@ -73,9 +71,6 @@ LiaAssistant/
 │   │
 │   └── storage/
 │       └── obsidian_manager.py  # CRUD + búsqueda por palabra en el Vault
-│
-├── scripts/
-│   └── download_model.py        # Descarga de modelos Live2D (Cubism 2/3)
 │
 ├── tests/                       # Suite pytest (núcleo, servicios, proactivo, ML, semántico…)
 ├── docs/                        # Guías (validación de la Fase 2, etc.)
@@ -127,8 +122,6 @@ python main.py
 | :--- | :--- | :--- |
 | `PROACTIVE_ENABLED` | `True` | Activa/desactiva los recordatorios proactivos. |
 | `LIA_PROACTIVE_DEBUG` | `False` | Tiempos en segundos + sugerencia demo al arrancar (ver [docs/validacion_fase2.md](docs/validacion_fase2.md)). |
-| `LIVE2D_MODEL_PATH` | *(vacío)* | Activa el modo personaje Live2D apuntando a un `.model3.json`/`.model.json`. |
-| `LIA_MASCOT` | *(vacío)* | `cat` para usar el gato dibujado (legacy) en lugar del orbe. |
 | `TTS_VOICE` | `es-ES-ElviraNeural` | Voz de Edge-TTS. |
 
 ---

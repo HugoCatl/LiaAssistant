@@ -37,12 +37,10 @@ class OrbMascot(MascotBehaviorMixin, QWidget):
 
     WIDGET_W = 92
     WIDGET_H = 92
-    _wander_enabled = False  # el orbe no pasea
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._mood = MascotMood.IDLE
-        self._facing = -1
 
         self._breath = 0.0   # respiración
         self._spin = 0.0     # rotación del halo

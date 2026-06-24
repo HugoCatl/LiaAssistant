@@ -15,15 +15,6 @@ from src.services.tts_service import TTSService
 def main():
     print("[Main] Initializing LIA Assistant base environment...")
 
-    # Configura el formato OpenGL con canal alfa ANTES de crear la QApplication,
-    # por si la mascota Live2D necesita una ventana transparente. Inofensivo si
-    # finalmente se usa el gato dibujado.
-    try:
-        from src.gui.live2d_mascot import configure_surface_format
-        configure_surface_format()
-    except Exception:
-        pass
-
     # Initialize PyQt application
     app = QApplication(sys.argv)
 
@@ -34,7 +25,7 @@ def main():
     # Instantiate the system components
     state_manager = StateManager()
     view = View()
-    mascot = make_mascot()  # Live2D si está disponible; si no, el gato dibujado
+    mascot = make_mascot()  # orbe minimalista
     keyboard_listener = KeyboardListener()
 
     # Orchestrate using the Mediator pattern
@@ -45,12 +36,6 @@ def main():
     app.aboutToQuit.connect(lambda: TTSService.get_instance().stop())
     if orchestrator.system_monitor is not None:
         app.aboutToQuit.connect(orchestrator.system_monitor.stop)
-    # Libera recursos de Live2D si se usó esa mascota
-    try:
-        from src.gui.live2d_mascot import dispose as live2d_dispose
-        app.aboutToQuit.connect(live2d_dispose)
-    except Exception:
-        pass
 
     # Start the orchestrator (launches KeyboardListener thread)
     orchestrator.start()

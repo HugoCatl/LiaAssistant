@@ -165,6 +165,11 @@ class SemanticIndex:
         self._save_cache()
         return len(new_meta)
 
+    def get_matrix(self):
+        """Devuelve (meta, vectors) tras asegurar que el índice está construido."""
+        self.build()
+        return self._meta, self._vectors
+
     # ------------------------------------------------------------------ search
 
     def search(self, query: str, top_k: int = 5):

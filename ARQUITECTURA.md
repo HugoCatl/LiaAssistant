@@ -38,8 +38,7 @@ LIA es una aplicación de escritorio **Python + PyQt6** estructurada por capas (
 | Tecnología | Rol en LIA | Local / Nube |
 | :--- | :--- | :--- |
 | **Python 3.10+** | Lenguaje base. | — |
-| **PyQt6** | Framework de GUI: ventana sin marcos, orbe (QPainter), señales/slots, hilos (`QThread`), reproducción de audio (`QtMultimedia`). | Local |
-| **PyQt6 QtOpenGLWidgets + PyOpenGL** | Renderizado OpenGL transparente para la mascota Live2D opcional. | Local |
+| **PyQt6** | Framework de GUI: ventana sin marcos, orbe (QPainter con gradientes), señales/slots, hilos (`QThread`), reproducción de audio (`QtMultimedia`). | Local |
 | **google-genai** | Cliente del modelo de lenguaje **Gemini** (Flash y Pro), con *streaming* y *function calling* (tool-calling). Es el cerebro conversacional. | Nube |
 | **faster-whisper** | Transcripción de voz a texto (STT) en local, CPU, cuantización INT8. La voz nunca sale del equipo. | Local |
 | **edge-tts** | Síntesis de voz (TTS) con voces neuronales de Microsoft Edge. | Nube |
@@ -50,7 +49,6 @@ LIA es una aplicación de escritorio **Python + PyQt6** estructurada por capas (
 | **sqlite3** (stdlib) | Persistencia del feedback proactivo (Sí/Ahora no). | Local |
 | **Pillow** | Captura de pantalla (`ImageGrab`) como contexto visual para Gemini. | Local |
 | **pyperclip** | Lectura/escritura del portapapeles de Windows. | Local |
-| **live2d-py** | Runtime de modelos Live2D (Cubism 2 vía `live2d.v2`, Cubism 3 vía `live2d.v3`). Mascota tipo personaje opcional. | Local |
 | **pydantic / pydantic-settings** | Validación tipada de la configuración desde `.env`. | Local |
 | **python-dotenv** | Carga del archivo `.env`. | Local |
 | **pytest** | Suite de pruebas automatizadas. | Local |
@@ -66,11 +64,9 @@ LIA es una aplicación de escritorio **Python + PyQt6** estructurada por capas (
 
 ### 3.2. Presentación (`src/gui/`)
 - **`view.py`** — Panel principal: ventana **glassmorphic** translúcida y sin marcos, arrastrable, con campo de entrada y área de respuesta en *streaming*.
-- **`orb_mascot.py`** — **Presencia por defecto**. Orbe minimalista dibujado con `QRadialGradient`/`QConicalGradient`: núcleo con volumen, halo rotatorio (hipnótico), respiración y efectos por estado (ondas al escuchar, spinner al pensar, anillos al hablar, pip al recordar). Sin assets ni licencias.
-- **`live2d_mascot.py`** — Mascota tipo **personaje Live2D** (opt-in). `QOpenGLWidget` con fondo transparente; elige el runtime (`v2`/`v3`) según la extensión del modelo.
-- **`mascot.py`** — Gato dibujado en QPainter (legacy, opt-in con `LIA_MASCOT=cat`). Única variante que "pasea" por el borde.
-- **`mascot_behavior.py`** — **Mixin** compartido por todas las mascotas: clic vs. arrastre, *snap* al borde de pantalla y (opcional) paseo.
-- **`mascot_factory.py`** — Decide qué presencia construir: orbe por defecto, Live2D si `LIVE2D_MODEL_PATH`, gato si `LIA_MASCOT=cat`.
+- **`orb_mascot.py`** — La presencia de Lia en el escritorio. Orbe minimalista dibujado con `QRadialGradient`/`QConicalGradient`: núcleo con volumen, halo rotatorio (hipnótico), respiración y efectos por estado (ondas al escuchar, spinner al pensar, anillos al hablar, pip al recordar). Sin assets ni licencias.
+- **`mascot_behavior.py`** — **Mixin** con el comportamiento de ventana: colocación en el borde, clic vs. arrastre y *snap* al borde de pantalla.
+- **`mascot_factory.py`** — Construye la mascota (`make_mascot()`), punto único de creación.
 - **`components/`** — `input_field.py`, `output_display.py` y **`mascot_bubble.py`** (la burbuja "Sí / Ahora no" de las sugerencias proactivas, con auto-descarte).
 
 ### 3.3. Percepción de hardware (`src/io/`)
@@ -95,11 +91,17 @@ LIA es una aplicación de escritorio **Python + PyQt6** estructurada por capas (
 - **`semantic_index.py`** — Índice vectorial del vault. Recorre las notas `.md`, las embebe (fastembed/ONNX), persiste los vectores y reconstruye **incrementalmente por `mtime`**. Búsqueda por **similitud de coseno**. El embebedor es intercambiable (stub determinista en tests).
 - **`semantic_search.py`** — Expone la herramienta `search_notes_semantic(query)` que usa Gemini para buscar por significado. Si el modelo no está disponible, **cae a búsqueda por palabra clave**.
 
+**Clustering de temas (Fase 3B)**
+- **`topic_clusters.py`** — Agrupa las notas en **temas latentes** reutilizando los vectores del índice semántico. KMeans esférico (coseno) en numpy puro. Expone la herramienta `get_note_clusters()`: descubre patrones ("tienes N notas sobre X"), etiqueta cada tema con su nota más representativa.
+
+**Resumen diario (Fase 4)**
+- **`daily_summary.py`** — Expone la herramienta `get_todays_activity()`: recopila las notas capturadas **hoy** (por `mtime`) y, con el índice semántico, descubre sus **conexiones con notas anteriores**. Devuelve datos a Gemini, que redacta el digest y lo guarda como nota `Diario AAAA-MM-DD`. La herramienta no llama al LLM (evita recursión/coste).
+
 ### 3.5. Persistencia (`src/storage/`)
 - **`obsidian_manager.py`** — CRUD sobre el Vault: `create_note`, `read_note`, `write_note`, `append_to_note` y `search_notes` (por palabra). Genera *frontmatter* YAML, evita duplicados y protege contra escapes de directorio.
 
 ### 3.6. Configuración (`config/`)
-- **`settings.py`** — Modelo Pydantic que valida y tipa todas las variables de `.env` (claves de Gemini, ruta del vault, voz, flags proactivos, modelo Live2D…).
+- **`settings.py`** — Modelo Pydantic que valida y tipa todas las variables de `.env` (claves de Gemini, ruta del vault, voz, flags proactivos…).
 
 ---
 
@@ -134,7 +136,7 @@ Pregunta conceptual → Gemini llama a search_notes_semantic()
 
 ## 5. Decisiones de diseño relevantes
 
-- **Orbe en vez de personaje**: máxima profesionalidad, cero dependencias de arte/licencias y control total del render. El modo personaje (Live2D) queda como opt-in.
+- **Orbe en vez de personaje**: máxima profesionalidad, cero dependencias de arte/licencias y control total del render. Se descartaron las mascotas tipo personaje (gato QPainter y Live2D) para no añadir peso ni distracción a una herramienta de productividad.
 - **fastembed (ONNX) en vez de sentence-transformers (PyTorch)**: evita arrastrar +1 GB de dependencias; viable para distribuir.
 - **Regresión logística manual (numpy) en vez de scikit-learn**: cero peso extra e **interpretable** (se puede ver por qué Lia decide callar).
 - **Todo lo sensible en local**: voz, embeddings y aprendizaje no salen del equipo; al modelo de lenguaje solo va la conversación.
@@ -146,10 +148,11 @@ Pregunta conceptual → Gemini llama a search_notes_semantic()
 
 | Fase | Contenido | Estado |
 | :--- | :--- | :--- |
-| **1 — Presencia** | Orbe minimalista state-reactive; pipeline Live2D opcional. | ✅ |
+| **1 — Presencia** | Orbe minimalista state-reactive en el escritorio. | ✅ |
 | **2 — Proactividad** | Monitor de sistema + motor de reglas + burbuja no invasiva. | ✅ |
 | **3 — Cerebro (parte A)** | Búsqueda semántica local del vault (fastembed). | ✅ |
 | **3 — Cerebro (parte B)** | Score de relevancia que aprende del feedback. | ✅ |
-| **3 — Cerebro (resto)** | Auto-tags (NER), clustering de temas. | ⏳ Pendiente |
-| **4 — Resumen diario** | Digest que conecta capturas en conocimiento. | ⏳ Pendiente |
+| **3B — Clustering** | Descubrimiento de temas latentes (KMeans sobre embeddings). | ✅ |
+| **4 — Resumen diario** | Digest que conecta capturas de hoy con notas anteriores. | ✅ |
+| **3 — Cerebro (resto)** | Auto-tags con NER. | ⏳ Pendiente |
 | **5 — Producto** | Instalador, settings UI, onboarding, arranque con Windows. | ⏳ Pendiente |

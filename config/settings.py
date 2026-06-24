@@ -33,11 +33,6 @@ class Settings(BaseSettings):
     # General configuration
     debug: bool = Field(False, validation_alias="DEBUG")
 
-    # Mascota Live2D (opcional). Ruta a un .model3.json o a una carpeta que lo
-    # contenga. Si está vacío o no existe, se usa el gato dibujado (fallback).
-    live2d_model_path: str = Field("", validation_alias="LIVE2D_MODEL_PATH")
-    live2d_scale: float = Field(1.0, validation_alias="LIVE2D_SCALE")
-
     # Sistema proactivo (Fase 2)
     proactive_enabled: bool = Field(True, validation_alias="PROACTIVE_ENABLED")
     # Modo demo: reduce los cooldowns a segundos y lanza una sugerencia de ejemplo

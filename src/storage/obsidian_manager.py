@@ -16,6 +16,30 @@ def sanitize_filename(title: str) -> str:
     sanitized = re.sub(r'[\\/*?:"<>|]', "", title)
     return sanitized.strip()
 
+def normalize_tags(tags) -> List[str]:
+    """
+    Normaliza etiquetas para que sean VÁLIDAS en Obsidian, soportando entidades.
+
+    - Quita '#' y espacios sobrantes.
+    - Sustituye los espacios internos por '-' (las tags de Obsidian no admiten
+      espacios): 'persona/Juan Pérez' -> 'persona/Juan-Pérez'.
+    - Permite jerarquía 'tipo/Valor' (ej. proyecto/Lia, persona/Ana).
+    - Elimina caracteres no válidos y duplicados (sin distinguir mayúsculas).
+    """
+    out, seen = [], set()
+    for t in tags or []:
+        if not t or not str(t).strip():
+            continue
+        raw = str(t).strip().replace("#", "")
+        segments = [re.sub(r"\s+", "-", s.strip()) for s in raw.split("/") if s.strip()]
+        norm = "/".join(segments)
+        norm = re.sub(r"[^\w\-/]", "", norm, flags=re.UNICODE)  # letras (con acentos), dígitos, _-/
+        norm = norm.strip("-/")
+        if norm and norm.lower() not in seen:
+            seen.add(norm.lower())
+            out.append(norm)
+    return out
+
 def get_vault_path() -> Path:
     """
     Retorna la ruta absoluta del vault de Obsidian configurado y se asegura de que exista.
@@ -68,10 +92,9 @@ def create_note(title: str, content: str, tags: Optional[List[str]] = None) -> s
 
         # Crear frontmatter de tipo YAML compatible con Obsidian
         tag_lines = ""
-        if tags:
-            clean_tags = [t.strip().replace("#", "") for t in tags if t.strip()]
-            if clean_tags:
-                tag_lines = "\ntags:\n" + "\n".join(f"  - {clean_tags_item}" for clean_tags_item in clean_tags)
+        clean_tags = normalize_tags(tags)
+        if clean_tags:
+            tag_lines = "\ntags:\n" + "\n".join(f"  - {ct}" for ct in clean_tags)
 
         frontmatter = f"---\ndate: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{tag_lines}\n---\n\n"
         full_content = frontmatter + content
@@ -269,10 +292,9 @@ def write_note(title: str, content: str, tags: Optional[List[str]] = None) -> st
 
         # Crear frontmatter de tipo YAML compatible con Obsidian
         tag_lines = ""
-        if tags:
-            clean_tags = [t.strip().replace("#", "") for t in tags if t.strip()]
-            if clean_tags:
-                tag_lines = "\ntags:\n" + "\n".join(f"  - {clean_tags_item}" for clean_tags_item in clean_tags)
+        clean_tags = normalize_tags(tags)
+        if clean_tags:
+            tag_lines = "\ntags:\n" + "\n".join(f"  - {ct}" for ct in clean_tags)
 
         frontmatter = f"---\ndate: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{tag_lines}\n---\n\n"
         full_content = frontmatter + content

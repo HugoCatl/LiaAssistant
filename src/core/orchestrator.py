@@ -416,7 +416,7 @@ class Orchestrator(QObject):
         if self.proactive_engine is not None:
             self.proactive_engine.record_feedback(False)
         if self.mascot is not None:
-            from src.gui.mascot import MascotMood
+            from src.gui.mascot_behavior import MascotMood
             self.mascot.set_mood(MascotMood.IDLE)
 
     # --- Hardware Audio & STT Handlers ---
