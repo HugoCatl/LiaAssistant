@@ -1,39 +1,37 @@
 # Empaquetado de LIA
 
-Dos formas de distribuir LIA. Ambas parten de construir `LIA.exe` con PyInstaller.
-
-## 1) Construir el .exe (siempre)
+## Todo en uno: doble clic en `build.bat`
 
 En Windows, con el venv del proyecto activado, **doble clic en `build.bat`**.
-Hace: activa el venv, instala PyInstaller/Pillow, genera el icono, compila
-`LIA.exe`, lo copia a tu carpeta de Descargas y crea un acceso directo en el
-Escritorio. El ejecutable queda en `packaging\dist\LIA.exe` y en Descargas.
+Hace TODO de una vez:
 
-## 2a) Modo portatil (rapido)
+1. Activa el venv e instala PyInstaller/Pillow.
+2. Genera el icono y construye `LIA.exe` (onefile, sin consola).
+3. Copia `LIA.exe` a Descargas y crea el acceso directo en el Escritorio.
+4. Si tienes Inno Setup instalado, **genera tambien `LIA-Setup.exe`**
+   (instalador con eleccion de carpeta + desinstalador) y lo copia a Descargas.
 
-Te quedas con `LIA.exe` tal cual (en Descargas o donde quieras). El acceso
-directo del Escritorio ya lo crea `build.bat`. Para que arranque con Windows:
-doble clic en `activar_inicio_con_windows.bat` (y `desactivar_...` para quitarlo).
+Resultado en tu carpeta de Descargas:
+- `LIA.exe` -> la app portatil (para probar o pasar a un colega rapido).
+- `LIA-Setup.exe` -> el instalador completo (si habia Inno Setup).
 
-## 2b) Instalador real (recomendado para "plug and play")
+## Requisito unico para el instalador
 
-Genera un `LIA-Setup.exe` que deja **elegir la carpeta de instalacion**, crea
-accesos directos, opcion de inicio con Windows y un **desinstalador**.
+Instala **Inno Setup** (gratis, una sola vez): https://jrsoftware.org/isdl.php
+Despues, `build.bat` lo detecta solo y crea el `LIA-Setup.exe` automaticamente.
+Si no esta instalado, `build.bat` igual te deja el `LIA.exe` y te avisa.
 
-1. Instala Inno Setup (gratis): https://jrsoftware.org/isdl.php
-2. Asegurate de tener `packaging\dist\LIA.exe` (lo deja `build.bat`).
-3. Doble clic en `packaging\installer.iss` -> boton **Compile**
-   (o `ISCC.exe packaging\installer.iss`).
-4. Obtienes `packaging\LIA-Setup.exe`. Ese es el que compartes/instalas.
+## Inicio con Windows (modo portatil)
 
-El instalador no pide permisos de administrador (instala en la carpeta del
-usuario), por lo que la instalacion es directa.
+Si usas el `LIA.exe` suelto: doble clic en `activar_inicio_con_windows.bat`
+para que se abra al encender el PC (`desactivar_...` lo quita). Con el
+instalador, esa opcion sale como una casilla durante la instalacion.
 
 ## Donde guarda LIA sus datos
 
-Config (`.env`), audios temporales, capturas y la base de feedback se guardan en
-`%LOCALAPPDATA%\LiaAssistant`, no en Descargas ni junto al .exe. Las notas van a
-tu vault de Obsidian (la carpeta que elijas en los ajustes).
+Config (`.env`), audios temporales, capturas y feedback van a
+`%LOCALAPPDATA%\LiaAssistant` (no a Descargas ni junto al .exe). Las notas van a
+tu vault de Obsidian.
 
 ## Si el .exe falla al abrir
 

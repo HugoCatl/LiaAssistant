@@ -1,38 +1,58 @@
 @echo off
 REM ============================================================
-REM  Construye LIA.exe (onefile, sin consola) y lo copia a Descargas.
-REM  Basta con hacer DOBLE CLIC en este archivo.
+REM  TODO EN UNO: construye LIA.exe y, si Inno Setup esta
+REM  instalado, genera tambien LIA-Setup.exe. Un solo doble clic.
 REM ============================================================
 setlocal
 cd /d "%~dp0\.."
+set "DEST=%USERPROFILE%\Downloads"
 
-echo [1/5] Activando entorno virtual (si existe)...
+echo [1/6] Activando entorno virtual (si existe)...
 if exist "venv\Scripts\activate.bat" (
     call "venv\Scripts\activate.bat"
 ) else (
-    echo   No hay venv; se usara el Python del sistema.
+    echo   Sin venv; se usara el Python del sistema.
 )
 
-echo [2/5] Instalando herramientas de empaquetado...
+echo [2/6] Instalando herramientas de empaquetado...
 python -m pip install --upgrade pyinstaller pillow || goto :error
 
-echo [3/5] Generando icono...
+echo [3/6] Generando icono...
 python packaging\make_icon.py || goto :error
 
-echo [4/5] Construyendo LIA.exe (esto tarda unos minutos)...
+echo [4/6] Construyendo LIA.exe (tarda unos minutos)...
 pyinstaller --noconfirm --clean packaging\lia.spec || goto :error
 
-echo [5/6] Copiando a Descargas...
-set "DEST=%USERPROFILE%\Downloads"
+echo [5/6] Copiando a Descargas y creando acceso directo...
 copy /Y "dist\LIA.exe" "%DEST%\LIA.exe" >nul || goto :error
-
-echo [6/6] Creando acceso directo en el Escritorio...
 powershell -NoProfile -ExecutionPolicy Bypass -File "packaging\install_shortcuts.ps1" -Exe "%DEST%\LIA.exe"
+
+echo [6/6] Generando instalador (si Inno Setup esta presente)...
+set "ISCC="
+set "PF86=%ProgramFiles(x86)%"
+set "PF=%ProgramFiles%"
+if exist "%PF86%\Inno Setup 6\ISCC.exe" set "ISCC=%PF86%\Inno Setup 6\ISCC.exe"
+if not defined ISCC if exist "%PF%\Inno Setup 6\ISCC.exe" set "ISCC=%PF%\Inno Setup 6\ISCC.exe"
+if defined ISCC (
+    "%ISCC%" "packaging\installer.iss" || goto :error
+    copy /Y "packaging\LIA-Setup.exe" "%DEST%\LIA-Setup.exe" >nul
+    set "HASSETUP=1"
+) else (
+    echo   Inno Setup no encontrado. Para generar el instalador, instalalo
+    echo   desde https://jrsoftware.org/isdl.php y vuelve a ejecutar este .bat.
+)
 
 echo.
 echo ============================================================
 echo  LISTO.
-echo   - LIA.exe en:  %DEST%\LIA.exe
-echo   - Acceso directo en el Escritorio.
-echo   - Para abrir LIA al encender el PC: doble clic en
-echo     packaging\ac
+echo   - App:        %DEST%\LIA.exe   (+ acceso directo en el Escritorio)
+if defined HASSETUP echo   - Instalador: %DEST%\LIA-Setup.exe
+echo ============================================================
+pause
+exit /b 0
+
+:error
+echo.
+echo  ERROR durante el proceso. Revisa los mensajes de arriba y pasamelos.
+pause
+exit /b 1

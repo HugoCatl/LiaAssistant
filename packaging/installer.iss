@@ -35,7 +35,7 @@ Name: "desktopicon"; Description: "Crear acceso directo en el escritorio"; Group
 Name: "startup"; Description: "Abrir LIA al iniciar Windows"; GroupDescription: "Inicio con Windows:"; Flags: unchecked
 
 [Files]
-Source: "dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\LIA"; Filename: "{app}\{#MyAppExeName}"
@@ -44,4 +44,4 @@ Name: "{autodesktop}\LIA"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 Name: "{userstartup}\LIA"; Filename: "{app}\{#MyAppExeName}"; Tasks: startup
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "Abrir LIA ahora"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "Abrir LIA ahora"; Flags: nowait postinstall skipifsile
