@@ -9,6 +9,8 @@ from config import settings
 from src.core import StateManager, Orchestrator
 from src.gui import View
 from src.gui.mascot_factory import make_mascot
+from src.gui.onboarding import ensure_configured
+from src.gui.tray_icon import make_tray
 from src.io import KeyboardListener
 from src.services.tts_service import TTSService
 
@@ -21,6 +23,12 @@ def main():
     # CRITICAL: Prevent application from quitting when the view window is hidden.
     # This allows the background daemon to capture global hotkeys in the background.
     app.setQuitOnLastWindowClosed(False)
+
+    # Onboarding: si falta clave de Gemini o ruta del vault, pedirlas antes de
+    # arrancar (en vez de reventar en silencio al primer mensaje).
+    if not ensure_configured(settings):
+        print("[Main] Configuracion incompleta. Saliendo.")
+        return
 
     # Instantiate the system components
     state_manager = StateManager()
@@ -36,6 +44,10 @@ def main():
     app.aboutToQuit.connect(lambda: TTSService.get_instance().stop())
     if orchestrator.system_monitor is not None:
         app.aboutToQuit.connect(orchestrator.system_monitor.stop)
+
+    # Icono de bandeja del sistema: permite mostrar/ocultar y SALIR de verdad.
+    # Guardamos la referencia para que no lo recoja el recolector de basura.
+    tray = make_tray(app, orchestrator)
 
     # Start the orchestrator (launches KeyboardListener thread)
     orchestrator.start()
