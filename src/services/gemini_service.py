@@ -36,10 +36,12 @@ class GeminiWorker(QThread):
     tokens_consumed = pyqtSignal(int, int, int)
     error_occurred = pyqtSignal(str)
 
-    def __init__(self, prompt: str, image_path: str = None):
+    def __init__(self, prompt: str, image_path: str = None, history: list = None):
         super().__init__()
         self.prompt = prompt
         self.image_path = image_path
+        self.history = history or []          # turnos previos (memoria conversacional)
+        self.result_contents = []             # conversación actualizada tras este turno
         self.api_key = settings.gemini_api_key
         self.model_name = settings.gemini_model
 
@@ -90,7 +92,7 @@ class GeminiWorker(QThread):
                     print(f"[GeminiWorker] Contexto visual (imagen {self.image_path}) adjuntado correctamente.")
                 except Exception as e:
                     print(f"[GeminiWorker] Error al cargar la imagen: {e}")
-            contents = [types.Content(role="user", parts=parts)]
+            contents = list(self.history) + [types.Content(role="user", parts=parts)]
 
             total_prompt_tokens = 0
             total_candidate_tokens = 0
@@ -131,6 +133,9 @@ class GeminiWorker(QThread):
                     total_total_tokens += getattr(turn_usage, 'total_token_count', 0) or 0
 
                 if not function_calls:
+                    if turn_text:
+                        contents.append(types.Content(
+                            role="model", parts=[types.Part.from_text(text=turn_text)]))
                     break
 
                 model_parts = []
@@ -155,6 +160,7 @@ class GeminiWorker(QThread):
                 contents.append(types.Content(role="model", parts=model_parts))
                 contents.append(types.Content(role="tool", parts=tool_parts))
 
+            self.result_contents = contents
             self.tokens_consumed.emit(total_prompt_tokens, total_candidate_tokens, total_total_tokens)
 
         except Exception as e:
@@ -173,10 +179,12 @@ class GeminiReasoningWorker(QThread):
     tokens_consumed = pyqtSignal(int, int, int)
     error_occurred = pyqtSignal(str)
 
-    def __init__(self, prompt: str, image_path: str = None):
+    def __init__(self, prompt: str, image_path: str = None, history: list = None):
         super().__init__()
         self.prompt = prompt
         self.image_path = image_path
+        self.history = history or []          # turnos previos (memoria conversacional)
+        self.result_contents = []             # conversación actualizada tras este turno
         self.api_key = settings.gemini_api_key
         self.model_name = settings.gemini_model_reasoning
 
@@ -226,7 +234,7 @@ class GeminiReasoningWorker(QThread):
                     print(f"[GeminiReasoningWorker] Contexto visual (imagen {self.image_path}) adjuntado correctamente.")
                 except Exception as e:
                     print(f"[GeminiReasoningWorker] Error al cargar la imagen: {e}")
-            contents = [types.Content(role="user", parts=parts)]
+            contents = list(self.history) + [types.Content(role="user", parts=parts)]
 
             total_prompt_tokens = 0
             total_candidate_tokens = 0
@@ -267,6 +275,9 @@ class GeminiReasoningWorker(QThread):
                     total_total_tokens += getattr(turn_usage, 'total_token_count', 0) or 0
 
                 if not function_calls:
+                    if turn_text:
+                        contents.append(types.Content(
+                            role="model", parts=[types.Part.from_text(text=turn_text)]))
                     break
 
                 model_parts = []
@@ -291,6 +302,7 @@ class GeminiReasoningWorker(QThread):
                 contents.append(types.Content(role="model", parts=model_parts))
                 contents.append(types.Content(role="tool", parts=tool_parts))
 
+            self.result_contents = contents
             self.tokens_consumed.emit(total_prompt_tokens, total_candidate_tokens, total_total_tokens)
 
         except Exception as e:

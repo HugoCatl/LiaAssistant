@@ -150,9 +150,34 @@ Pregunta conceptual → Gemini llama a search_notes_semantic()
 | :--- | :--- | :--- |
 | **1 — Presencia** | Orbe minimalista state-reactive en el escritorio. | ✅ |
 | **2 — Proactividad** | Monitor de sistema + motor de reglas + burbuja no invasiva. | ✅ |
-| **3 — Cerebro (parte A)** | Búsqueda semántica local del vault (fastembed). | ✅ |
-| **3 — Cerebro (parte B)** | Score de relevancia que aprende del feedback. | ✅ |
-| **3B — Clustering** | Descubrimiento de temas latentes (KMeans sobre embeddings). | ✅ |
+| **3A — Búsqueda semántica** | Búsqueda local del vault por significado (fastembed). | ✅ |
+| **3B — Score que aprende** | Relevancia que aprende del feedback (regresión logística). | ✅ |
+| **3C — Clustering** | Descubrimiento de temas latentes (KMeans sobre embeddings). | ✅ |
+| **3D — Auto-tags** | Etiquetado de entidades (persona/proyecto/lugar) vía Gemini. | ✅ |
 | **4 — Resumen diario** | Digest que conecta capturas de hoy con notas anteriores. | ✅ |
-| **3 — Cerebro (resto)** | Auto-tags con NER. | ⏳ Pendiente |
-| **5 — Producto** | Instalador, settings UI, onboarding, arranque con Windows. | ⏳ Pendiente |
+| **4.5 — Pulido profesional** | Ajustes in-app, bandeja del sistema, onboarding, historial… (ver §7). | ⏳ Pendiente |
+| **5 — Producto** | Instalador `.exe`, arranque con Windows, distribución. | ⏳ Pendiente |
+
+---
+
+## 7. Fase 4.5 — Pulido profesional (backlog priorizado)
+
+Mejoras de bajo coste y alto impacto en la percepción de "producto", **antes** del empaquetado de la Fase 5. Ordenadas por ratio valor/esfuerzo.
+
+### Tier 1 — Quick wins (≈1–2 h)
+1. **Icono en la bandeja del sistema** (`QSystemTrayIcon`): mostrar/ocultar, abrir ajustes y **salir** de verdad. Comportamiento esperable de toda app de escritorio.
+2. **Onboarding de primer arranque**: si falta `GEMINI_API_KEY` o `OBSIDIAN_VAULT_PATH`, un diálogo amable para configurarlos en vez de un error.
+3. **Manejo elegante de errores**: mensajes claros (API caída, sin red, clave inválida) en lugar de excepciones crudas.
+4. **Log a fichero**: diagnóstico en `%LOCALAPPDATA%/LiaAssistant/lia.log` (rotativo).
+5. **Arranque con Windows** (opcional): acceso directo en la carpeta de inicio, con toggle.
+
+### Tier 2 — Media jornada, alto impacto
+6. **Panel de Ajustes in-app**: editar clave, vault, nombre/perfil, voz TTS, color de acento y flags proactivos **sin tocar `.env`**. Con botón "Probar" para validar clave/vault.
+7. **Historial de conversación persistente**: al reabrir el panel se recupera el contexto reciente (SQLite local).
+8. **Render Markdown en las respuestas**: negritas, listas y bloques de código (gran salto visual sobre el texto plano actual).
+9. **Modo captura rápida**: atajo → escribes → Enter guarda la nota al instante, sin abrir conversación.
+
+### Tier 3 — Toques finos (pequeños)
+10. **Selector de color de acento**: unifica orbe + panel; personalización con sensación premium.
+11. **Acciones en la respuesta**: "Copiar" y "Abrir en Obsidian".
+12. **Diálogo Acerca de / versión**.

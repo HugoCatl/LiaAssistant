@@ -31,6 +31,7 @@ class Orchestrator(QObject):
         self.mascot = mascot
         self.worker = None
         self.current_response_text = ""
+        self.history = []  # memoria conversacional (lista de types.Content) de la sesión
 
         # Setup QMediaPlayer for TTS responses
         self.player = QMediaPlayer()
@@ -165,6 +166,10 @@ class Orchestrator(QObject):
         # Separator
         menu.addSeparator()
 
+        # Nueva conversación (olvida el historial)
+        new_chat = menu.addAction("🆕 Nueva conversación")
+        new_chat.triggered.connect(self.reset_conversation)
+
         # Help info item (non-clickable info)
         help_item = menu.addAction("🎙️ Micro: haz clic para hablar | Atajo: Shift_L + L")
         help_item.setEnabled(False)
@@ -291,13 +296,13 @@ class Orchestrator(QObject):
                 print(f"[Orchestrator] Error al capturar pantalla: {e}")
                 screenshot_path = None
 
-        # Enrutar inteligentemente según la intención
+        # Enrutar inteligentemente según la intención (pasando la memoria conversacional)
         if self.detect_reasoning_intent(user_text):
             print(f"[Orchestrator] Enrutando '{user_text}' al Agente de Razonamiento (Gemini Pro)...")
-            self.worker = GeminiReasoningWorker(user_text, image_path=screenshot_path)
+            self.worker = GeminiReasoningWorker(user_text, image_path=screenshot_path, history=self.history)
         else:
             print(f"[Orchestrator] Enrutando '{user_text}' al Agente de Acción Rápida (Gemini Flash)...")
-            self.worker = GeminiWorker(user_text, image_path=screenshot_path)
+            self.worker = GeminiWorker(user_text, image_path=screenshot_path, history=self.history)
         
         # Connect signals
         self.worker.token_received.connect(self.on_token_received)
@@ -349,6 +354,23 @@ class Orchestrator(QObject):
         cursor.insertHtml(f"<br/><span style='color: #F87171;'><b>Error:</b> {err_msg}</span><br/>")
         self.view.output_display.ensureCursorVisible()
 
+    def _trim_history(self, contents, max_items: int = 16):
+        """
+        Acota la memoria conversacional a los últimos `max_items` turnos para no
+        disparar el consumo de tokens. Garantiza que el historial empiece por un
+        turno 'user' (evita dejar una respuesta de herramienta sin su llamada).
+        """
+        trimmed = list(contents[-max_items:])
+        while trimmed and getattr(trimmed[0], "role", None) != "user":
+            trimmed.pop(0)
+        return trimmed
+
+    def reset_conversation(self):
+        """Empieza una conversación nueva: olvida el historial y limpia el panel."""
+        self.history = []
+        self.view.output_display.clear()
+        self.show_welcome_greeting()
+
     def on_generation_finished(self):
         """Restores the UI state to idle when the generation ends."""
         self.state_manager.set_state(AssistantState.IDLE)
@@ -356,6 +378,10 @@ class Orchestrator(QObject):
         # Trigger text to speech on the generated text
         if self.current_response_text:
             TTSService.get_instance().speak(self.current_response_text)
+
+        # Conserva la conversación actualizada (memoria entre turnos), acotada
+        if self.worker and getattr(self.worker, "result_contents", None):
+            self.history = self._trim_history(self.worker.result_contents)
 
         # Safely mark QThread for garbage collection
         if self.worker:
