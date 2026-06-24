@@ -175,6 +175,10 @@ class Orchestrator(QObject):
         new_chat = menu.addAction("🆕 Nueva conversación")
         new_chat.triggered.connect(self.reset_conversation)
 
+        # Cerrar LIA del todo (no depende del icono de la bandeja)
+        quit_action = menu.addAction("🚪 Cerrar LIA")
+        quit_action.triggered.connect(self.quit_app)
+
         # Help info item (non-clickable info)
         help_item = menu.addAction("🎙️ Micro: haz clic para hablar | Atajo: Shift_L + L")
         help_item.setEnabled(False)
@@ -388,6 +392,28 @@ class Orchestrator(QObject):
         self.history = []
         self.view.output_display.clear()
         self.show_welcome_greeting()
+
+    def quit_app(self):
+        """Cierra LIA por completo: detiene los hilos de fondo y mata el proceso."""
+        print("[Orchestrator] Cerrando LIA...")
+        try:
+            self.keyboard_listener.stop()
+        except Exception:
+            pass
+        try:
+            if self.system_monitor is not None:
+                self.system_monitor.stop()
+        except Exception:
+            pass
+        try:
+            TTSService.get_instance().stop()
+        except Exception:
+            pass
+        from PyQt6.QtWidgets import QApplication
+        QApplication.quit()
+        # Red de seguridad: si algun hilo nativo (pynput/Win32) impide salir,
+        # forzamos el cierre del proceso al poco tiempo.
+        QTimer.singleShot(600, lambda: os._exit(0))
 
     def on_generation_finished(self):
         """Restores the UI state to idle when the generation ends."""

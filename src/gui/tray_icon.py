@@ -74,8 +74,8 @@ def make_tray(app, orchestrator) -> QSystemTrayIcon:
     menu.addSeparator()
 
     quit_action = menu.addAction("Salir")
-    quit_action.triggered.connect(app.quit)
+    quit_action.triggered.connect(orchestrator.quit_app)
 
     tray.setContextMenu(menu)
 
-    # Clic normal sob
+    # Cl
