@@ -3,7 +3,7 @@ from PyQt6.QtCore import Qt, QPoint, QSize, QRectF, QPointF
 from PyQt6.QtGui import QColor, QIcon, QPixmap, QPainter, QPainterPath, QPen, QBrush, QRadialGradient
 
 from src.gui.components.input_field import InputField
-from src.gui.components.output_display import OutputDisplay
+from src.gui.components.chat_view import ChatView
 from src.gui import styles
 from src.core.state_manager import AssistantState
 
@@ -344,10 +344,10 @@ class View(QWidget):
 
         card_layout.addLayout(header_layout)
 
-        # Output text browser
-        self.output_display = OutputDisplay(self.card)
-        self.output_display.setMinimumHeight(150)
-        card_layout.addWidget(self.output_display)
+        # Conversacion con burbujas reales (usuario derecha / Lia izquierda)
+        self.chat = ChatView(self.card)
+        self.chat.setMinimumHeight(150)
+        card_layout.addWidget(self.chat)
 
         # Bottom row (Input Field + Mic Button)
         bottom_layout = QHBoxLayout()
@@ -441,10 +441,11 @@ class View(QWidget):
                 }
             """)
 
-    def show_config_menu(self, devices: list, current_device_id, tts_enabled: bool, tts_callback, mic_callback):
+    def show_config_menu(self, devices: list, current_device_id, tts_enabled: bool,
+                         tts_callback, mic_callback, sound_enabled: bool = True, sound_callback=None):
         """
         Dynamically generates and displays a context menu containing
-        a toggle for TTS and a list of available audio input devices.
+        toggles for TTS y el sonido de recordatorios, y la lista de micrófonos.
         """
         menu = QMenu(self)
         menu.setStyleSheet("""
@@ -478,6 +479,12 @@ class View(QWidget):
         tts_action = menu.addAction(tts_label)
         tts_action.triggered.connect(tts_callback)
 
+        # Sonido de recordatorios
+        if sound_callback is not None:
+            sound_label = "🔔 Sonido de recordatorios" if sound_enabled else "🔕 Sonido de recordatorios"
+            sound_action = menu.addAction(sound_label)
+            sound_action.triggered.connect(sound_callback)
+
         menu.addSeparator()
 
         # Add an action for each device
@@ -493,6 +500,14 @@ class View(QWidget):
     def close_requested(self):
         """Hides the assistant overlay, keeping the background process alive."""
         self.hide()
+
+    def keyPressEvent(self, event):
+        """Esc oculta el panel (sin cerrar la app)."""
+        if event.key() == Qt.Key.Key_Escape:
+            self.close_requested()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     # Drag-to-move implementation for Frameless Window
     def mousePressEvent(self, event):

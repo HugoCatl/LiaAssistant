@@ -27,6 +27,9 @@ hiddenimports = []
 for pkg in [
     "fastembed", "onnxruntime", "faster_whisper", "ctranslate2",
     "tokenizers", "google", "google.genai", "edge_tts", "huggingface_hub",
+    # Pila de red (google-genai/edge-tts usan httpx/aiohttp); sin esto el .exe
+    # puede arrancar pero fallar al llamar a Gemini o al TTS.
+    "httpx", "httpcore", "h11", "certifi", "anyio", "sniffio", "aiohttp",
 ]:
     try:
         d, b, h = collect_all(pkg)
@@ -43,6 +46,8 @@ except Exception:
     pass
 
 hiddenimports += collect_submodules("pynput")
+# QtMultimedia (chime de recordatorios + reproducción TTS)
+hiddenimports += ["PyQt6.QtMultimedia"]
 
 a = Analysis(
     [os.path.join(ROOT, "main.py")],

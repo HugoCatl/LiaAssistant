@@ -25,6 +25,11 @@ from config.paths import env_path
 _ENV_PATH = env_path()
 
 
+def _default_vault() -> str:
+    """Carpeta sugerida para el vault: Documentos/LIA (se crea al guardar)."""
+    return str(Path.home() / "Documents" / "LIA").replace("\\", "/")
+
+
 def _upsert_env(updates: dict):
     """Crea o actualiza claves en .env conservando el resto del archivo."""
     path = env_path()
@@ -82,16 +87,27 @@ class OnboardingDialog(QDialog):
         lay.setContentsMargins(26, 22, 26, 22)
         lay.setSpacing(7)
 
-        title = QLabel("AJUSTES" if self._settings_mode else "CONFIGURA LIA", card)
+        title = QLabel("AJUSTES" if self._settings_mode else "TE DOY LA BIENVENIDA", card)
         title.setStyleSheet(styles.title_style(16))
         lay.addWidget(title)
+        if not self._settings_mode:
+            subtitle = QLabel(
+                "Soy Lia, tu segundo cerebro de escritorio. Dime cómo te llamas, pega tu "
+                "clave de Gemini y elige dónde guardaré tus notas. Listo en 20 segundos.",
+                card,
+            )
+            subtitle.setWordWrap(True)
+            subtitle.setStyleSheet(
+                "QLabel { color: %s; font-family: %s; font-size: 12px;"
+                " background: transparent; }" % (styles.TEXT_DIM, styles.FONT))
+            lay.addWidget(subtitle)
         lay.addSpacing(4)
 
         # --- Perfil ---
         lay.addWidget(_section("Perfil", card))
         lay.addWidget(self._field_label("Tu nombre", card))
         self.name_input = QLineEdit(current_name, card)
-        self.name_input.setPlaceholderText("Hugo")
+        self.name_input.setPlaceholderText("Tu nombre")
         self.name_input.setStyleSheet(styles.input_style())
         lay.addWidget(self.name_input)
         lay.addSpacing(8)
@@ -104,13 +120,19 @@ class OnboardingDialog(QDialog):
         self.key_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.key_input.setStyleSheet(styles.input_style())
         lay.addWidget(self.key_input)
+        if not self._settings_mode:
+            hint = QLabel("¿No tienes clave? Es gratis en aistudio.google.com/apikey", card)
+            hint.setStyleSheet(
+                "QLabel { color: %s; font-family: %s; font-size: 10px;"
+                " background: transparent; }" % (styles.TEXT_DIM, styles.FONT))
+            lay.addWidget(hint)
         lay.addSpacing(4)
 
-        lay.addWidget(self._field_label("Carpeta del vault de Obsidian", card))
+        lay.addWidget(self._field_label("Carpeta donde Lia guardará tus notas", card))
         vault_row = QHBoxLayout()
         vault_row.setSpacing(8)
-        self.vault_input = QLineEdit(current_vault, card)
-        self.vault_input.setPlaceholderText("C:/LIAI")
+        self.vault_input = QLineEdit(current_vault or _default_vault(), card)
+        self.vault_input.setPlaceholderText(_default_vault())
         self.vault_input.setStyleSheet(styles.input_style())
         vault_row.addWidget(self.vault_input)
         browse = QPushButton("Examinar...", card)
@@ -204,7 +226,13 @@ class OnboardingDialog(QDialog):
             self.warning.setText("Falta la clave de la API de Gemini.")
             return
         if not vault:
-            self.warning.setText("Falta la carpeta del vault.")
+            self.warning.setText("Falta la carpeta donde guardar las notas.")
+            return
+        # Crear la carpeta si no existe (plug & play: el usuario no la prepara a mano)
+        try:
+            Path(vault).mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            self.warning.setText(f"No pude crear la carpeta: {e}")
             return
         self._result = {
             "name": name or "Usuario",

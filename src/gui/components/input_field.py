@@ -1,11 +1,14 @@
 from PyQt6.QtWidgets import QLineEdit
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 
 from src.gui import styles
 
 
 class InputField(QLineEdit):
     """QLineEdit con estetica 'pill' translucida y foco indigo."""
+
+    recall_requested = pyqtSignal()  # ↑ con el campo vacío: recuperar último mensaje
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setPlaceholderText("Escribe a Lia o pulsa el micro para hablar…")
@@ -30,3 +33,11 @@ class InputField(QLineEdit):
             }}
             QLineEdit::placeholder {{ color: rgba(255, 255, 255, 0.32); }}
         """)
+
+    def keyPressEvent(self, event):
+        # ↑ con el campo vacío recupera el último mensaje enviado
+        if event.key() == Qt.Key.Key_Up and not self.text():
+            self.recall_requested.emit()
+            event.accept()
+            return
+        super().keyPressEvent(event)

@@ -43,3 +43,10 @@ temp_*
 *.mp3
 *.wav
 *.png
+
+# PyInstaller build output (LIA.exe se reconstruye con packaging/build.bat)
+build/
+dist/
+*.spec.bak
+packaging/lia.ico
+build_log.txt

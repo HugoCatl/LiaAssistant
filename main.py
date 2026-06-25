@@ -20,6 +20,16 @@ def main():
     # This allows the background daemon to capture global hotkeys in the background.
     app.setQuitOnLastWindowClosed(False)
 
+    # Auto-instalación silenciosa en el primer arranque (solo .exe): si se ejecuta
+    # desde Descargas, se copia a su carpeta y crea accesos directos. Un doble clic.
+    try:
+        from src.bootstrap.self_install import ensure_installed
+        installed = ensure_installed()
+        if installed:
+            print(f"[Main] LIA se ha instalado en {installed}")
+    except Exception as e:
+        print(f"[Main] Auto-instalación omitida: {e}")
+
     # Onboarding: si falta clave de Gemini o ruta del vault, pedirlas antes de
     # arrancar (en vez de reventar en silencio al primer mensaje).
     from src.gui.onboarding import ensure_configured
@@ -68,4 +78,9 @@ def main():
     mascot.show()
     splash.close()
 
-    # Start PyQt event lo
+    # Start PyQt event loop
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()

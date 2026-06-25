@@ -35,7 +35,7 @@ def test_clipboard_suggestion_and_dedup():
     eng = ProactiveEngine(global_cooldown_s=0)
     got = _collect(eng)
 
-    eng.on_clipboard_changed("x" * 60)
+    eng.on_clipboard_changed("x" * 120)
     assert len(got) == 1
     text, prefill, auto_submit, mood = got[0]
     assert "portapapeles" in prefill.lower()
@@ -44,7 +44,7 @@ def test_clipboard_suggestion_and_dedup():
 
     # El mismo texto no se vuelve a sugerir
     got.clear()
-    eng.on_clipboard_changed("x" * 60)
+    eng.on_clipboard_changed("x" * 120)
     assert got == []
 
 
@@ -59,8 +59,8 @@ def test_clipboard_url_phrasing():
 def test_global_cooldown_blocks_second_suggestion():
     eng = ProactiveEngine(global_cooldown_s=300)
     got = _collect(eng)
-    eng.on_clipboard_changed("a" * 60)
-    eng.on_clipboard_changed("b" * 60)
+    eng.on_clipboard_changed("a" * 120)
+    eng.on_clipboard_changed("b" * 120)
     assert len(got) == 1  # la segunda queda bloqueada por el cooldown
 
 
@@ -115,12 +115,12 @@ def test_dismiss_feedback_extends_cooldown():
     eng = ProactiveEngine(global_cooldown_s=0)
     got = _collect(eng)
     # Primera sugerencia: se emite y se asocia un _pending_label
-    eng.on_clipboard_changed("a" * 60)
+    eng.on_clipboard_changed("a" * 120)
     assert len(got) == 1
     # Rechazo → refuerza cooldown
     eng.global_cooldown_s = 300
     eng.record_feedback(accepted=False)
-    eng.on_clipboard_changed("b" * 60)
+    eng.on_clipboard_changed("b" * 120)
     assert len(got) == 1  # la segunda queda bloqueada por el cooldown reforzado
 
 
@@ -135,6 +135,51 @@ def test_note_activity_resets_idle_flag():
     got.clear()
     eng.on_tick("App", idle_seconds=0)
     assert got == []  # ya no insiste porque hubo actividad reciente
+
+
+def test_clipboard_ignores_routine_short_copy():
+    """Copiar texto corto de una línea (no URL) ya no dispara sugerencia."""
+    eng = ProactiveEngine(global_cooldown_s=0)
+    got = _collect(eng)
+    eng.on_clipboard_changed("def suma(a, b): return a + b")  # < 100 chars, una línea
+    assert got == []
+
+
+def test_clipboard_multiline_is_noteworthy():
+    """Texto multilínea sustancial (lista/párrafo) sí merece sugerencia."""
+    eng = ProactiveEngine(global_cooldown_s=0)
+    got = _collect(eng)
+    eng.on_clipboard_changed("- comprar pan\n- llamar a Ana\n- terminar informe del proyecto")
+    assert len(got) == 1
+
+
+def test_short_url_is_noteworthy():
+    eng = ProactiveEngine(global_cooldown_s=0)
+    got = _collect(eng)
+    eng.on_clipboard_changed("https://x.io")  # URL corta
+    assert len(got) == 1
+    assert "enlace" in got[0][0].lower()
+
+
+def test_focus_survives_tab_change_same_app():
+    """Cambiar de pestaña/archivo dentro de la misma app no reinicia el foco."""
+    eng = ProactiveEngine(global_cooldown_s=0, focus_gap_s=10, eod_hour=99)
+    got = _collect(eng)
+    eng.on_active_window_changed("main.py — VS Code")
+    eng._focus_since -= 20                       # 20s de foco
+    eng.on_active_window_changed("otro.py — VS Code")  # misma app, otra pestaña
+    eng.on_tick("otro.py — VS Code", idle_seconds=0)
+    assert len(got) == 1                         # el contador NO se reinició
+
+
+def test_focus_resets_on_real_app_change():
+    eng = ProactiveEngine(global_cooldown_s=0, focus_gap_s=10, eod_hour=99)
+    got = _collect(eng)
+    eng.on_active_window_changed("main.py — VS Code")
+    eng._focus_since -= 20
+    eng.on_active_window_changed("Bandeja — Chrome")  # app distinta -> reinicia
+    eng.on_tick("Bandeja — Chrome", idle_seconds=0)
+    assert got == []                             # aún no lleva tiempo en la nueva app
 
 
 def test_system_monitor_helpers_are_safe():

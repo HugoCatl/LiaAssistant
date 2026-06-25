@@ -54,7 +54,9 @@ class SystemMonitor(QObject):
     active_window_changed = pyqtSignal(str)
     tick = pyqtSignal(str, float)
 
-    _MIN_CLIPBOARD_LEN = 40  # ignora copias triviales (una palabra, etc.)
+    # Filtro grueso: deja pasar URLs cortas; el motor decide la relevancia real
+    # (ver ProactiveEngine._is_noteworthy_clip).
+    _MIN_CLIPBOARD_LEN = 15
 
     def __init__(self, poll_ms: int = 4000, parent=None):
         super().__init__(parent)

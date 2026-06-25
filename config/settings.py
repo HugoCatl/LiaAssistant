@@ -42,7 +42,6 @@ class Settings(BaseSettings):
 
     # User Profile settings (parameterizes personal data)
     user_name: str = Field("Usuario", validation_alias="USER_NAME")
-    user_age: str = Field("20", validation_alias="USER_AGE")
     user_profile: str = Field("Usuario", validation_alias="USER_PROFILE")
 
 # Instantiated settings object

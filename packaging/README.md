@@ -1,39 +1,50 @@
 # Empaquetado de LIA
 
-## Un solo doble clic: `build.bat`
+## Construir el `.exe`
 
-En Windows, con el venv del proyecto activado, **doble clic en `build.bat`**.
-Hace todo sin necesitar nada externo (ni Inno Setup):
+En Windows, con el venv del proyecto activado:
 
-1. Construye `LIA.exe` (onefile, sin consola).
-2. Lo copia a Descargas y crea el acceso directo en el Escritorio.
-3. Arma el paquete de instalacion en `Descargas\LIA-Instalador\` y su zip
-   `Descargas\LIA-Instalador.zip`.
+```bash
+pyinstaller --noconfirm --clean packaging/lia.spec
+```
 
-## Que repartes al usuario
+Resultado: **`dist/LIA.exe`** (onefile, sin consola, ~178 MB). El icono se genera
+con `python packaging/make_icon.py` (lo hace también `build.bat`).
 
-- **Lo mas simple:** el `LIA.exe` suelto. Lo abre directamente, sin instalar.
-- **Con instalador (recomendado):** el `LIA-Instalador.zip`. El usuario lo
-  descomprime y da **doble clic en `Instalar LIA.bat`**. El instalador (solo
-  PowerShell, sin dependencias) le deja elegir carpeta, crea accesos directos,
-  pregunta si abrir LIA al iniciar Windows y registra un **desinstalador** en
-  "Agregar o quitar programas". No pide permisos de administrador.
+> `build.bat` es un atajo todo-en-uno: genera el icono, construye el exe y lo
+> copia a Descargas.
 
-El usuario final no instala Inno Setup ni Python ni nada: solo necesita su clave
-de Gemini en el primer arranque.
+## Qué repartes al usuario
 
-## Donde guarda LIA sus datos
+**Solo `LIA.exe`.** Un único archivo. Cuando el usuario lo abre por primera vez,
+el propio exe **se autoinstala** (`src/bootstrap/self_install.py`):
 
-Config (`.env`), audios temporales, capturas y feedback van a
-`%LOCALAPPDATA%\LiaAssistant`. Las notas van a tu vault de Obsidian.
+- se copia a `%LOCALAPPDATA%\Programs\LIA`,
+- crea accesos directos en el Escritorio y el menú Inicio,
+- se registra en "Agregar o quitar programas" (con desinstalador, sin admin),
+- y abre el onboarding (nombre, clave de Gemini, carpeta de notas).
 
-## Alternativa: instalador con Inno Setup (opcional)
+No hace falta descomprimir nada, ni `.bat`, ni Python, ni Obsidian. Las siguientes
+veces se abre desde el acceso directo.
 
-Si prefieres un instalador .exe clasico tipo asistente, existe `installer.iss`
-para Inno Setup. Es opcional; el paquete PowerShell de arriba ya cubre lo mismo
-sin descargar nada.
+> Los scripts `Instalar-LIA.ps1` / `Instalar LIA.bat` siguen disponibles como
+> instalador alternativo, pero con la auto-instalación ya **no son necesarios**.
+
+## Dónde guarda LIA sus datos
+
+Config (`.env`), historial, feedback, logs y temporales van a
+`%LOCALAPPDATA%\LiaAssistant`. Las notas van a la carpeta que el usuario elige en
+el onboarding (archivos `.md`; Obsidian es opcional).
+
+## Lo que el usuario verá la primera vez
+
+- **SmartScreen** ("editor desconocido") porque el exe no está firmado →
+  *Más información → Ejecutar de todos modos*.
+- Tiene que poner **su** clave gratis de Gemini (aistudio.google.com/apikey).
+- La primera búsqueda semántica o nota por voz **descarga los modelos** (~100-200 MB).
 
 ## Si el .exe falla al abrir
 
-Suele ser un `ModuleNotFoundError` de las librerias de IA. Anade ese modulo a
-`hiddenimports` en `lia.spec` y reconstruye.
+Suele ser un `ModuleNotFoundError` de alguna librería. Añade ese módulo a
+`hiddenimports` en `lia.spec` y reconstruye. El log está en
+`%LOCALAPPDATA%\LiaAssistant\lia.log`.

@@ -52,7 +52,8 @@ def get_vault_path() -> Path:
         path.mkdir(parents=True, exist_ok=True)
     return path
 
-def create_note(title: str, content: str, tags: Optional[List[str]] = None) -> str:
+def create_note(title: str, content: str, tags: Optional[List[str]] = None,
+                auto_link: bool = True) -> str:
     """
     Crea una nueva nota en formato Markdown (.md) dentro del Vault de Obsidian.
     Si la nota ya existe, se genera un archivo nuevo añadiendo un sufijo de marca de tiempo (timestamp)
@@ -98,6 +99,14 @@ def create_note(title: str, content: str, tags: Optional[List[str]] = None) -> s
 
         frontmatter = f"---\ndate: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{tag_lines}\n---\n\n"
         full_content = frontmatter + content
+
+        # Enlazado automático: teje conexiones con notas afines (nunca rompe la creación)
+        if auto_link:
+            try:
+                from src.services.auto_link import append_related_links
+                full_content = append_related_links(clean_title, full_content)
+            except Exception:
+                pass
 
         with open(note_path, 'w', encoding='utf-8') as f:
             f.write(full_content)
@@ -361,4 +370,65 @@ def append_to_note(title: str, content: str) -> str:
         return f"Contenido añadido con éxito al final de la nota '{note_path.name}'."
     except Exception as e:
         return f"Error al añadir contenido a la nota en Obsidian: {str(e)}"
+
+
+def _resolve_note_path(vault, title: str):
+    """Localiza el .md de una nota por título (directo o sin distinguir may/min)."""
+    clean_title = sanitize_filename(title)
+    if not clean_title:
+        return None
+    note_path = vault / f"{clean_title}.md"
+    if note_path.exists():
+        return note_path
+    for p in vault.iterdir():
+        if p.is_file() and p.suffix.lower() == ".md" and p.stem.lower() == clean_title.lower():
+            return p
+    return None
+
+
+def editar_nota(title: str, buscar: str, reemplazar: str) -> str:
+    """
+    Edición fina de una nota: localiza un fragmento exacto y lo sustituye, dejando
+    el resto de la nota intacto. Ideal para cambiar un dato puntual (una fecha, un
+    nombre, una línea) en notas largas SIN reescribirlas enteras.
+
+    Args:
+        title: El título o nombre de la nota a editar.
+        buscar: El fragmento de texto exacto que se quiere localizar.
+        reemplazar: El texto por el que se sustituye el fragmento encontrado.
+
+    Returns:
+        Un mensaje indicando el resultado (cuántas coincidencias se cambiaron).
+    """
+    try:
+        if not buscar:
+            return "Error: el texto a buscar no puede estar vacío."
+
+        vault = get_vault_path()
+        note_path = _resolve_note_path(vault, title)
+        if note_path is None:
+            return f"Error: No se encontró la nota '{title}' en el Vault."
+
+        # Seguridad: evitar escape de directorio
+        if not note_path.resolve().is_relative_to(vault.resolve()):
+            return "Error: Acceso no autorizado fuera del Vault."
+
+        with open(note_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        count = content.count(buscar)
+        if count == 0:
+            return (f"No se encontró el fragmento «{buscar}» en la nota "
+                    f"'{note_path.name}'. No se cambió nada. Revisa el texto exacto "
+                    f"o usa 'read_note' para verlo.")
+
+        new_content = content.replace(buscar, reemplazar)
+        with open(note_path, "w", encoding="utf-8") as f:
+            f.write(new_content)
+
+        veces = "1 coincidencia" if count == 1 else f"{count} coincidencias"
+        return (f"Nota '{note_path.name}' editada: se cambió «{buscar}» por "
+                f"«{reemplazar}» ({veces}). El resto quedó intacto.")
+    except Exception as e:
+        return f"Error al editar la nota en Obsidian: {str(e)}"
 

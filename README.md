@@ -1,35 +1,100 @@
-# ✧ LIA Assistant — Asistente Personal y Segundo Cerebro Autónomo
+# ✧ LIA — Tu segundo cerebro de escritorio con IA
 
-LIA es un asistente virtual de escritorio nativo de Windows, de alto rendimiento y baja latencia, diseñado como el puente de captura para tu **Segundo Cerebro (Second Brain)**. Se ejecuta como un demonio en segundo plano, vive en el escritorio como un **orbe minimalista** y se activa al instante con un atajo global para registrar, organizar y **conectar por significado** tu vida profesional y personal en tu bóveda local de Obsidian.
+**LIA** es un asistente de escritorio para Windows que vive como un **orbe minimalista** en tu pantalla y captura tus ideas **desde cualquier aplicación** —por voz, portapapeles o mirando tu pantalla— para convertirlas en una colección de notas Markdown que **se organiza y se conecta sola**.
 
-> 📄 ¿Buscas el detalle técnico? Lee **[ARQUITECTURA.md](ARQUITECTURA.md)** — qué tecnología se usa y qué hace cada cosa.
+No es "otro chat con IA": es un **segundo cerebro** que te acompaña en el escritorio, aprende qué te interesa y teje las conexiones entre tus notas por ti.
 
----
-
-## 💡 Propósito principal
-
-El núcleo de LIA es la **construcción automatizada de tu grafo de conocimiento**. Cada vez que registras una idea, tarea, proyecto o nota, LIA analiza la información, crea o actualiza las notas en Obsidian y las **vincula bidireccionalmente** (`[[Nota]]`) a tu perfil principal. Con el tiempo, tu grafo se dibuja solo.
-
-A esto se suman tres capacidades que la convierten en algo más que un capturador:
-
-- 🟣 **Presencia viva (orbe)** que reacciona a su estado y te acompaña en el escritorio.
-- 🔔 **Recordatorios proactivos** que detectan cuándo merece la pena anotar algo.
-- 🧠 **Memoria semántica** que encuentra tus notas por *significado*, no por palabra exacta.
+> 📐 ¿Buscas el detalle técnico? → **[ARQUITECTURA.md](ARQUITECTURA.md)** (qué tecnología usa y qué hace cada pieza).
 
 ---
 
-## ✨ Funcionalidades clave
+## ¿Por qué es diferente?
 
-1. **Orbe minimalista state-reactive**: presencia elegante en una esquina (estilo Siri/Raycast), dibujada con gradientes animados. Late, gira y cambia de expresión según el estado (escuchando, pensando, hablando, recordando). Clic para abrir, arrastrar para mover.
-2. **Recordatorios proactivos inteligentes**: un motor observa el portapapeles, la ventana activa y tu inactividad y, sin interrumpir, sugiere capturar lo importante mediante una burbuja "Sí / Ahora no".
-3. **Aprendizaje del feedback (ML local)**: una regresión logística aprende de cada "Sí/Ahora no" y **silencia los patrones de recordatorio que rechazas**. Cuanto más la usas, menos molesta.
-4. **Búsqueda semántica del vault**: embeddings locales (ONNX) permiten preguntar *"¿qué sé sobre productividad?"* y encontrar notas que ni mencionan esa palabra. 100% local.
-5. **Captura por voz multimodal**: micrófono integrado con transcripción local asíncrona vía **Whisper**.
-6. **Visión de pantalla**: captura la pantalla como contexto visual para Gemini bajo demanda ("mira mi pantalla y resume…").
-7. **Vinculación bidireccional automática**: el grafo de Obsidian se autoorganiza con sintaxis `[[Nota]]`.
-8. **Enrutamiento Flash/Pro**: Gemini Flash para acción rápida; Gemini Pro reservado para razonamiento o mentoría compleja.
-9. **Respuesta por voz (TTS)**: confirmaciones habladas con Edge-TTS.
-10. **Automatización del SO**: abrir aplicaciones, leer/escribir el portapapeles.
+- 🌍 **Captura desde cualquier sitio, no solo dentro de un editor.** Estás trabajando en lo que sea y sueltas una idea por voz, portapapeles o pantalla, sin cambiar de contexto.
+- 🔒 **Local-first de verdad.** La búsqueda semántica, el clustering, el aprendizaje y el índice corren **en tu máquina**. Solo la conversación con el modelo sale a la nube.
+- 🧠 **Aprende de ti.** Los recordatorios proactivos se **callan** cuando aprenden que ese tipo de aviso no te aporta.
+- 📂 **Tus notas son tuyas.** Archivos `.md` normales en una carpeta tuya. **Obsidian es opcional** (solo si quieres ver el grafo bonito).
+
+---
+
+## ✨ Funcionalidades
+
+**Presencia e interfaz**
+- 🟣 **Orbe state-reactive**: presencia elegante (estilo Siri/Raycast), dibujada con gradientes animados; late, gira y cambia de expresión según el estado.
+- 💬 **Chat con burbujas reales**: tus mensajes a la derecha, los de Lia a la izquierda con su mini-orbe; *streaming* token a token, indicador "escribiendo…", marcas de tiempo y **Markdown** renderizado.
+- 🔔 **Bandeja del sistema** (mostrar/ocultar/salir) y **chime** de recordatorios sintetizado (sin assets).
+- ⌨️ **Atajos**: `Shift_L + L` global para mostrar/ocultar, `Esc` cierra el panel, `↑` recupera tu último mensaje.
+
+**Inteligencia y memoria**
+- 🧠 **Memoria conversacional**: Lia recuerda los turnos anteriores; el historial persiste entre sesiones.
+- 🔍 **Búsqueda semántica local**: pregunta *"¿qué sé sobre productividad?"* y encuentra notas que ni mencionan esa palabra (embeddings ONNX, 100% local).
+- 🔗 **Auto-enlazado**: al crear una nota, Lia detecta las relacionadas por significado y las enlaza sola (`[[ ]]`).
+- 🏷️ **Auto-tags de entidades**: etiqueta `persona/…`, `proyecto/…`, `lugar/…` automáticamente.
+- 🗂️ **Clustering de temas**: descubre los temas latentes de tu vault ("tienes N notas sobre X").
+- 📓 **Resumen diario**: digest que conecta lo capturado hoy con tus notas anteriores.
+- ✏️ **Edición fina**: cambia un dato puntual de una nota larga sin reescribirla entera.
+
+**Captura y proactividad**
+- 🎙️ **Voz**: micrófono con transcripción local (Whisper).
+- 📸 **Visión de pantalla**: captura la pantalla como contexto para Gemini bajo demanda.
+- 🤖 **Recordatorios proactivos**: detectan cuándo merece la pena anotar (portapapeles, foco prolongado, fin de día) y **aprenden** de tu feedback (Sí / Ahora no).
+- ⚡ **Enrutamiento Flash/Pro**: Gemini Flash para acción rápida, Pro para razonamiento o mentoría.
+- 🔊 **Respuesta por voz** (Edge-TTS) y **automatización del SO** (abrir apps, portapapeles).
+
+---
+
+## 🚀 Instalación
+
+### Opción A — Usuario final (recomendada): un archivo, un doble clic
+
+1. Descarga **`LIA.exe`**.
+2. Doble clic. Windows SmartScreen avisará (app sin firmar) → **Más información → Ejecutar de todos modos**.
+3. A partir de ahí es automático: LIA **se autoinstala** (se copia a su carpeta, crea el acceso directo en el escritorio y se registra en *Agregar o quitar programas*) y abre la **bienvenida**.
+4. Escribe tu nombre, pega tu **clave gratis de Gemini** ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)) y elige la carpeta de notas (se crea sola). Listo.
+
+> No necesitas instalar Python, ni Obsidian, ni nada. Todo va dentro del `.exe`. La primera vez que uses voz o búsqueda semántica, LIA descargará sus modelos de IA (~100-200 MB).
+
+### Opción B — Desarrollador (desde el código)
+
+```bash
+python -m venv venv
+.\venv\Scripts\activate
+pip install -r requirements.txt
+python main.py
+```
+
+Requisitos: **Python 3.10+** y una API Key de Gemini. En el primer arranque, el onboarding crea el `.env` por ti (o cópialo de `.env.example`).
+
+---
+
+## ⚙️ Configuración
+
+Casi todo se configura desde la **interfaz** (onboarding y menú de ajustes): nombre, clave, carpeta, voz, micrófono y sonido de recordatorios. Para ajustes avanzados, el `.env`:
+
+| Variable | Por defecto | Qué hace |
+| :--- | :--- | :--- |
+| `GEMINI_API_KEY` | — | Tu clave de Gemini (gratis). |
+| `OBSIDIAN_VAULT_PATH` | — | Carpeta donde Lia guarda las notas `.md`. |
+| `GEMINI_MODEL` / `GEMINI_MODEL_REASONING` | `gemini-2.5-flash` / `pro` | Modelos rápido / de razonamiento. |
+| `PROACTIVE_ENABLED` | `True` | Activa los recordatorios proactivos. |
+| `LIA_PROACTIVE_DEBUG` | `False` | Tiempos cortos + demo al arrancar (para probar). |
+| `TTS_ENABLED` / `TTS_VOICE` | `True` / `es-ES-ElviraNeural` | Voz de respuesta. |
+
+---
+
+## 🔒 Privacidad
+
+La transcripción de voz (Whisper), la búsqueda semántica (embeddings), el clustering y el aprendizaje del feedback corren **100% en tu máquina**. Solo la conversación con el modelo de lenguaje (y, bajo demanda, una captura de pantalla) viaja a Gemini — **nunca tu vault completo**. Toda la configuración y el estado viven en `%LOCALAPPDATA%/LiaAssistant`.
+
+---
+
+## 🧪 Pruebas
+
+```bash
+.\venv\Scripts\pytest tests/ -q
+```
+
+~100 pruebas que cubren núcleo, servicios, motor proactivo, ML de relevancia, búsqueda semántica, clustering, auto-enlazado, edición de notas, interfaz de chat, panel de info y auto-instalación.
 
 ---
 
@@ -37,105 +102,60 @@ A esto se suman tres capacidades que la convierten en algo más que un capturado
 
 ```plaintext
 LiaAssistant/
-│
+├── main.py                       # Arranque (auto-instalación + onboarding + arranque)
 ├── config/
-│   └── settings.py              # Configuración validada con Pydantic-Settings (.env)
-│
+│   ├── settings.py               # Configuración tipada (Pydantic) desde .env
+│   ├── paths.py                  # Rutas de datos (%LOCALAPPDATA%/LiaAssistant)
+│   └── logging_setup.py          # Log a fichero + errores legibles
 ├── src/
 │   ├── core/
-│   │   ├── orchestrator.py      # Patrón Mediator: coordina UI, estado, voz, proactividad
-│   │   └── state_manager.py     # Máquina de estados (Idle/Listening/Processing/Responding)
-│   │
-│   ├── gui/                     # Capa de presentación (PyQt6)
-│   │   ├── view.py              # Panel glassmorphic translúcido sin marcos
-│   │   ├── orb_mascot.py        # Orbe minimalista state-reactive (la presencia)
-│   │   ├── mascot_behavior.py   # Mixin: colocación, clic/arrastre, snap al borde
-│   │   ├── mascot_factory.py    # Construye la mascota
-│   │   └── components/          # Sub-widgets (input, output, burbuja proactiva)
-│   │
-│   ├── io/                      # Percepción de hardware
-│   │   ├── audio_recorder.py    # Captura de micrófono con VAD (hilo aparte)
-│   │   └── keyboard_listener.py # Atajo global (QThread + pynput)
-│   │
-│   ├── services/               # Lógica de servicios (cloud y local)
-│   │   ├── gemini_service.py    # Workers asíncronos Flash/Pro con tool-calling
-│   │   ├── whisper_local.py     # Transcripción local (faster-whisper)
-│   │   ├── tts_service.py       # Síntesis de voz (Edge-TTS)
-│   │   ├── os_automation.py     # Abrir apps, portapapeles
-│   │   ├── system_monitor.py    # Vigila portapapeles, ventana activa, inactividad
-│   │   ├── proactive_engine.py  # Reglas + ML: decide CUÁNDO sugerir
-│   │   ├── relevance_scorer.py  # Regresión logística que aprende del feedback
-│   │   ├── feedback_store.py    # Persistencia del feedback (SQLite)
-│   │   ├── semantic_index.py    # Índice vectorial del vault (fastembed)
-│   │   └── semantic_search.py   # Herramienta search_notes_semantic
-│   │
+│   │   ├── orchestrator.py       # Mediator: coordina UI, estado, voz, IA, proactividad
+│   │   └── state_manager.py      # Máquina de estados (Idle/Listening/Processing/Responding)
+│   ├── bootstrap/
+│   │   └── self_install.py       # Auto-instalación del .exe en el primer arranque
+│   ├── gui/
+│   │   ├── view.py               # Panel glassmorphic translúcido sin marcos
+│   │   ├── orb_mascot.py         # Orbe minimalista state-reactive
+│   │   ├── mascot_behavior.py    # Colocación, clic/doble-clic/arrastre, snap
+│   │   ├── onboarding.py         # Bienvenida / ajustes (nombre, clave, carpeta, voz)
+│   │   ├── tray_icon.py          # Icono de bandeja (mostrar/ocultar/salir)
+│   │   ├── splash.py             # Pantalla de carga con progreso
+│   │   ├── chime.py              # Chime de recordatorios sintetizado (WAV)
+│   │   ├── md_render.py          # Markdown → HTML para las respuestas
+│   │   └── components/
+│   │       ├── chat_view.py      # Conversación con burbujas reales + streaming
+│   │       ├── info_panel.py     # Popup de acciones rápidas (rediseñado)
+│   │       ├── input_field.py    # Campo de entrada (pill) + atajo ↑
+│   │       ├── mascot_bubble.py  # Burbuja "Sí / Ahora no" proactiva
+│   │       └── reminder_bubble.py# Burbuja de recordatorio (Listo / Posponer)
+│   ├── io/
+│   │   ├── audio_recorder.py     # Micrófono con VAD (hilo aparte)
+│   │   └── keyboard_listener.py  # Atajo global (QThread + pynput)
+│   ├── services/
+│   │   ├── gemini_service.py     # Workers Flash/Pro: streaming + tool-calling + memoria
+│   │   ├── whisper_local.py      # Transcripción local (faster-whisper)
+│   │   ├── tts_service.py        # Voz de respuesta (Edge-TTS)
+│   │   ├── os_automation.py      # Abrir apps, portapapeles
+│   │   ├── conversation_store.py # Historial persistente (JSON)
+│   │   ├── system_monitor.py     # Portapapeles / ventana activa / inactividad
+│   │   ├── proactive_engine.py   # Decide CUÁNDO sugerir (reglas + ML)
+│   │   ├── relevance_scorer.py   # Regresión logística que aprende del feedback
+│   │   ├── feedback_store.py     # Feedback proactivo (SQLite)
+│   │   ├── reminder_service.py / reminders.py  # Recordatorios con hora
+│   │   ├── semantic_index.py     # Índice vectorial del vault (fastembed/ONNX)
+│   │   ├── semantic_search.py    # Herramienta search_notes_semantic
+│   │   ├── auto_link.py          # Enlazado automático de notas afines
+│   │   ├── topic_clusters.py     # Clustering de temas (KMeans)
+│   │   └── daily_summary.py      # Resumen diario con conexiones
 │   └── storage/
-│       └── obsidian_manager.py  # CRUD + búsqueda por palabra en el Vault
-│
-├── tests/                       # Suite pytest (núcleo, servicios, proactivo, ML, semántico…)
-├── docs/                        # Guías (validación de la Fase 2, etc.)
-├── .env.example
-├── requirements.txt
-└── main.py                      # Punto de entrada
+│       └── obsidian_manager.py   # CRUD de notas: crear/leer/escribir/editar/etiquetar
+├── packaging/                    # Build del .exe (PyInstaller), icono, instalador
+├── tests/                        # Suite pytest (~100 pruebas)
+└── requirements.txt
 ```
 
 ---
 
-## 🚀 Instalación y puesta en marcha
+## 📈 Estado
 
-### 1. Requisitos
-* **Python 3.10 o superior**.
-* **Obsidian** con una bóveda local creada.
-* Una **API Key de Google Gemini** (gratis en Google AI Studio).
-
-### 2. Entorno
-```bash
-python -m venv venv
-.\venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### 3. Variables de entorno
-Copia `.env.example` a `.env` y rellena:
-```env
-GEMINI_API_KEY=tu_clave_aqui
-GEMINI_MODEL=gemini-2.5-flash
-GEMINI_MODEL_REASONING=gemini-2.5-pro
-OBSIDIAN_VAULT_PATH=C:\RutaDeTuVault
-WHISPER_MODEL_PATH=small
-TTS_ENABLED=True
-USER_NAME=TuNombre
-```
-
-### 4. Ejecutar
-```bash
-python main.py
-```
-* **Mostrar/Ocultar panel**: `Shift_L + L` de forma global.
-* **Abrir desde el orbe**: clic sobre el orbe; arrástralo para reposicionarlo.
-
----
-
-## ⚙️ Configuración opcional
-
-| Variable | Por defecto | Qué hace |
-| :--- | :--- | :--- |
-| `PROACTIVE_ENABLED` | `True` | Activa/desactiva los recordatorios proactivos. |
-| `LIA_PROACTIVE_DEBUG` | `False` | Tiempos en segundos + sugerencia demo al arrancar (ver [docs/validacion_fase2.md](docs/validacion_fase2.md)). |
-| `TTS_VOICE` | `es-ES-ElviraNeural` | Voz de Edge-TTS. |
-
----
-
-## 🧪 Pruebas
-
-```bash
-.\venv\Scripts\pytest tests/
-```
-
-La suite cubre el núcleo, los servicios, el motor proactivo, el modelo de relevancia (ML) y la búsqueda semántica.
-
----
-
-## 🔒 Privacidad
-
-La transcripción de voz (Whisper), la búsqueda semántica (embeddings) y el aprendizaje del feedback corren **100% en tu máquina**. Solo la conversación con el modelo de lenguaje (y, bajo demanda, una captura de pantalla) viaja a la API de Gemini — nunca tu vault completo. El histórico de feedback se guarda en SQLite local bajo `%LOCALAPPDATA%/LiaAssistant`.
+LIA está **funcionalmente completa** y es distribuible como `.exe` autoinstalable. Para el detalle de fases y lo que queda, ver **[ESTADO_Y_FASES.md](ESTADO_Y_FASES.md)**.

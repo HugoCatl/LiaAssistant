@@ -37,14 +37,18 @@ class Orchestrator(QObject):
         self.mascot = mascot
         self.worker = None
         self.current_response_text = ""
-        self._response_anchor = None   # posicion donde empieza la respuesta (para render markdown)
         self._pending_meta = None      # consumo de tokens, se muestra al final del turno
+        self._last_user_text = ""      # para recuperar con ↑
         self.history = []  # memoria conversacional (lista de types.Content) de la sesión
 
         # Setup QMediaPlayer for TTS responses
         self.player = QMediaPlayer()
         self.audio_output = QAudioOutput()
         self.player.setAudioOutput(self.audio_output)
+
+        # Chime de recordatorios (QSoundEffect: baja latencia, no choca con el TTS)
+        self._reminder_chime = self._build_reminder_chime()
+        self.reminder_sound_enabled = True
 
         # Connect speech ready signal to playback handler
         TTSService.get_instance().speech_ready.connect(self.play_speech_audio)
@@ -64,6 +68,7 @@ class Orchestrator(QObject):
         self.keyboard_listener.hotkey_triggered.connect(self.toggle_ui)
         self.state_manager.state_changed.connect(self.on_state_changed)
         self.view.input_field.returnPressed.connect(self.handle_input_submission)
+        self.view.input_field.recall_requested.connect(self._recall_last_message)
 
         # Wire settings config wheel and microphone recording buttons
         self.view.config_button.clicked.connect(self.open_settings)
@@ -120,8 +125,8 @@ class Orchestrator(QObject):
             self.bubble.dismissed.connect(self.on_suggestion_dismissed)
 
     def show_welcome_greeting(self):
-        """Muestra un saludo proactivo e inspirador en el display si está vacío, incitando a registrar ideas o tareas."""
-        if not self.view.output_display.toPlainText().strip():
+        """Muestra un saludo proactivo e inspirador si el chat está vacío, incitando a registrar ideas o tareas."""
+        if self.view.chat.is_empty():
             import random
             greetings = [
                 f"¡Hola {settings.user_name}! ¿Qué idea se te ha ocurrido hoy? 💡",
@@ -130,74 +135,46 @@ class Orchestrator(QObject):
                 f"Hola {settings.user_name}, ¿tienes alguna idea o nota profesional para enlazar hoy? ✨",
                 "¡Hola! ¿Qué se te pasa por la cabeza hoy? Estoy lista para anotarlo todo. 📝"
             ]
-            greeting = random.choice(greetings)
-            self.view.output_display.setHtml(
-                f"<span style='color: #818CF8; font-weight: bold;'>LIA:</span> "
-                f"<span style='color: #E8EAF2;'>{greeting}</span>"
-            )
+            self.view.chat.add_lia(random.choice(greetings))
+
+    def _prefill(self, text: str):
+        """Autocompleta el campo de entrada y le da el foco."""
+        self.view.input_field.setText(text)
+        self.view.input_field.setFocus()
+
+    def _recall_last_message(self):
+        """↑ con el campo vacío: recupera el último mensaje enviado."""
+        if self._last_user_text:
+            self.view.input_field.setText(self._last_user_text)
+            self.view.input_field.end(False)
 
     def show_info_menu(self):
-        """Muestra un menú desplegable con guías rápidas y ejemplos interactivos que autocompletan el input."""
-        from PyQt6.QtWidgets import QMenu
-        from PyQt6.QtCore import QPoint
-        
-        menu = QMenu(self.view)
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: rgba(22, 16, 28, 0.96);
-                border: 1px solid rgba(99, 102, 241, 0.4);
-                border-radius: 8px;
-                color: #E8EAF2;
-                padding: 4px;
-                font-family: 'Segoe UI', 'Outfit', sans-serif;
-                font-size: 11px;
-            }
-            QMenu::item {
-                padding: 6px 14px;
-                background-color: transparent;
-                border-radius: 4px;
-            }
-            QMenu::item:selected {
-                background-color: rgba(99, 102, 241, 0.25);
-                color: #FFFFFF;
-            }
-            QMenu::separator {
-                height: 1px;
-                background: rgba(99, 102, 241, 0.2);
-                margin: 4px 8px;
-            }
-        """)
-
-        # Visión de pantalla
-        vision_action = menu.addAction("📸 Ver Pantalla: \"Mira mi pantalla y resume...\"")
-        vision_action.triggered.connect(lambda: self.view.input_field.setText("Mira mi pantalla y resume lo que ves."))
-
-        # Portapapeles
-        clip_action = menu.addAction("📋 Portapapeles: \"Crea una nota con mi portapapeles\"")
-        clip_action.triggered.connect(lambda: self.view.input_field.setText("Crea una nota con lo que tengo en mi portapapeles."))
-
-        # Cerebro
-        brain_action = menu.addAction("🧠 Segundo Cerebro: \"Busca en mis notas...\"")
-        brain_action.triggered.connect(lambda: self.view.input_field.setText("Busca en mis notas sobre "))
-
-        # Separator
-        menu.addSeparator()
-
-        # Nueva conversación (olvida el historial)
-        new_chat = menu.addAction("🆕 Nueva conversación")
-        new_chat.triggered.connect(self.reset_conversation)
-
-        # Cerrar LIA del todo (no depende del icono de la bandeja)
-        quit_action = menu.addAction("🚪 Cerrar LIA")
-        quit_action.triggered.connect(self.quit_app)
-
-        # Help info item (non-clickable info)
-        help_item = menu.addAction("🎙️ Micro: haz clic para hablar | Atajo: Shift_L + L")
-        help_item.setEnabled(False)
-
-        # Position menu right below the info button
-        pos = self.view.info_button.mapToGlobal(QPoint(0, self.view.info_button.height()))
-        menu.exec(pos)
+        """Muestra el panel de acciones rápidas (ejemplos + acciones) rediseñado."""
+        from src.gui.components.info_panel import InfoPanel
+        sections = [
+            ("Ejemplos", [
+                {"emoji": "📸", "title": "Ver mi pantalla",
+                 "subtitle": "Mira y resume lo que tengo abierto",
+                 "callback": lambda: self._prefill("Mira mi pantalla y resume lo que ves.")},
+                {"emoji": "📋", "title": "Guardar el portapapeles",
+                 "subtitle": "Crea una nota con lo copiado",
+                 "callback": lambda: self._prefill("Crea una nota con lo que tengo en mi portapapeles.")},
+                {"emoji": "🧠", "title": "Buscar en mi memoria",
+                 "subtitle": "Encuentra notas por significado",
+                 "callback": lambda: self._prefill("Busca en mis notas sobre ")},
+            ]),
+            ("Acciones", [
+                {"emoji": "🆕", "title": "Nueva conversación",
+                 "subtitle": "Empieza de cero", "callback": self.reset_conversation},
+                {"emoji": "⚙️", "title": "Ajustes",
+                 "subtitle": "Perfil, voz y micrófono", "callback": self.open_settings},
+                {"emoji": "🚪", "title": "Cerrar LIA",
+                 "subtitle": "Salir del todo", "callback": self.quit_app, "danger": True},
+            ]),
+        ]
+        footer = "Atajos:  Esc cierra el panel  ·  ↑ recupera tu último mensaje  ·  Shift_L + L mostrar/ocultar"
+        self._info_panel = InfoPanel(sections, footer=footer, parent=self.view)
+        self._info_panel.show_below(self.view.info_button)
 
 
 
@@ -293,7 +270,6 @@ class Orchestrator(QObject):
         self.player.stop()
         TTSService.get_instance().stop()
         self.current_response_text = ""
-        self._response_anchor = None
         self._pending_meta = None
 
         # Prevent starting a new request if one is already running
@@ -304,6 +280,7 @@ class Orchestrator(QObject):
         user_text = self.view.input_field.text().strip()
         if not user_text:
             return
+        self._last_user_text = user_text
 
         # Registrar actividad: el usuario interactuó con Lia (resetea inactividad)
         if self.proactive_engine is not None:
@@ -312,10 +289,9 @@ class Orchestrator(QObject):
         # Clear input field
         self.view.input_field.clear()
 
-        # Update display logs
-        self.view.output_display.append(f"<span style='color: #818CF8; font-weight: bold;'>Tú:</span> <span style='color: #E8EAF2;'>{user_text}</span>")
-        self.view.output_display.append("<span style='color: #818CF8; font-weight: bold;'>LIA:</span> ")
-        self.view.output_display.ensureCursorVisible()
+        # Pintar el turno del usuario y abrir la burbuja de Lia para el streaming
+        self.view.chat.add_user(user_text)
+        self.view.chat.begin_lia()
 
         # Set UI state to processing
         self.state_manager.set_state(AssistantState.PROCESSING)
@@ -353,22 +329,12 @@ class Orchestrator(QObject):
         self.worker.start()
 
     def on_token_received(self, token: str):
-        """Streams text tokens inline directly into the output display."""
+        """Transmite los tokens dentro de la burbuja de Lia (animación carácter a carácter)."""
         if self.state_manager.state == AssistantState.PROCESSING:
             self.state_manager.set_state(AssistantState.RESPONDING)
 
-        if self._response_anchor is None:
-            c = self.view.output_display.textCursor()
-            c.movePosition(c.MoveOperation.End)
-            self._response_anchor = c.position()
-
         self.current_response_text += token
-
-        # Move text cursor to end and insert token inline (produces character-by-character animation)
-        cursor = self.view.output_display.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        cursor.insertText(token)
-        self.view.output_display.ensureCursorVisible()
+        self.view.chat.stream_lia(token)
 
     def on_tool_call_detected(self, name: str, args: dict):
         """Muestra en consola que una herramienta está siendo ejecutada."""
@@ -385,11 +351,7 @@ class Orchestrator(QObject):
     def on_error_occurred(self, err_msg: str):
         """Registra el error y muestra un mensaje humano en el panel."""
         logging.getLogger("lia").error("Error en worker: %s", err_msg)
-        friendly = friendly_error(err_msg)
-        cursor = self.view.output_display.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        cursor.insertHtml(f"<br/><span style='color: {styles.DANGER};'>{friendly}</span><br/>")
-        self.view.output_display.ensureCursorVisible()
+        self.view.chat.add_system(friendly_error(err_msg), "error")
 
     def _trim_history(self, contents, max_items: int = 16):
         """
@@ -406,7 +368,7 @@ class Orchestrator(QObject):
         """Empieza una conversación nueva: olvida el historial y limpia el panel."""
         self.history = []
         conversation_store.clear()
-        self.view.output_display.clear()
+        self.view.chat.clear()
         self.show_welcome_greeting()
 
     def _history_to_turns(self, contents):
@@ -435,19 +397,13 @@ class Orchestrator(QObject):
         self._render_saved_history(turns)
 
     def _render_saved_history(self, turns):
-        """Pinta los turnos recuperados en el panel (Lia con Markdown renderizado)."""
-        import html as _html
-        from src.gui.md_render import markdown_to_html
-        blocks = []
+        """Pinta los turnos recuperados como burbujas (Lia con Markdown renderizado)."""
+        self.view.chat.clear()
         for t in turns:
             if t["role"] == "user":
-                blocks.append(
-                    f"<p><b style='color:{styles.ACCENT_BRIGHT}'>Tú:</b> "
-                    f"<span style='color:{styles.TEXT}'>{_html.escape(t['text'])}</span></p>")
+                self.view.chat.add_user(t["text"])
             else:
-                blocks.append(
-                    f"<p><b style='color:{styles.ACCENT_BRIGHT}'>LIA:</b> {markdown_to_html(t['text'])}</p>")
-        self.view.output_display.setHtml("".join(blocks))
+                self.view.chat.add_lia(t["text"])
 
     def on_reminder_due(self, texto: str):
         """Un recordatorio vencido entra en la cola y se muestra de uno en uno."""
@@ -456,6 +412,33 @@ class Orchestrator(QObject):
             return
         self._reminder_queue.append(texto)
         self._show_next_reminder()
+
+    def _build_reminder_chime(self):
+        """Crea el QSoundEffect del chime; devuelve None si no se puede preparar."""
+        try:
+            from PyQt6.QtMultimedia import QSoundEffect
+            from PyQt6.QtCore import QUrl
+            from src.gui.chime import chime_path
+            effect = QSoundEffect()
+            effect.setSource(QUrl.fromLocalFile(chime_path()))
+            effect.setVolume(0.35)
+            return effect
+        except Exception as e:
+            logging.getLogger("lia").warning("No se pudo preparar el chime: %s", e)
+            return None
+
+    def _play_reminder_chime(self):
+        if self._reminder_chime is not None and self.reminder_sound_enabled:
+            try:
+                self._reminder_chime.play()
+            except Exception:
+                pass
+
+    def toggle_reminder_sound(self):
+        """Activa/silencia el chime de los recordatorios (esta sesión)."""
+        self.reminder_sound_enabled = not self.reminder_sound_enabled
+        estado = "activado" if self.reminder_sound_enabled else "silenciado"
+        self.view.chat.add_system(f"Sonido de recordatorios {estado}", "info")
 
     def _show_next_reminder(self):
         if self.mascot is None or not self._reminder_queue:
@@ -470,6 +453,7 @@ class Orchestrator(QObject):
         self._current_reminder = self._reminder_queue.pop(0)
         from src.gui.mascot_behavior import MascotMood
         self.mascot.set_mood(MascotMood.REMINDER)
+        self._play_reminder_chime()
         self._reminder_bubble.show_for(self._current_reminder, self.mascot)
 
     def _reset_reminder_mood(self):
@@ -519,21 +503,14 @@ class Orchestrator(QObject):
         """Restores the UI state to idle when the generation ends."""
         self.state_manager.set_state(AssistantState.IDLE)
 
-        # Render Markdown: sustituye el texto plano transmitido por su HTML
-        self.view.output_display.finalize_response(self._response_anchor, self.current_response_text)
-        self._response_anchor = None
+        # Cierra la burbuja de Lia: render Markdown (o la descarta si quedó vacía)
+        self.view.chat.end_lia(self.current_response_text)
 
         # Mostrar el consumo de tokens al final del turno
         if self._pending_meta:
             p, c, t = self._pending_meta
-            cursor = self.view.output_display.textCursor()
-            cursor.movePosition(cursor.MoveOperation.End)
-            cursor.insertHtml(
-                f"<br/><span style='color: {styles.TEXT_DIM}; font-size: 11px; font-style: italic;'>"
-                f"[Tokens · entrada {p} · salida {c} · total {t}]</span><br/>"
-            )
+            self.view.chat.add_system(f"Tokens · entrada {p} · salida {c} · total {t}", "meta")
             self._pending_meta = None
-            self.view.output_display.ensureCursorVisible()
 
         # Trigger text to speech on the generated text
         if self.current_response_text:
@@ -637,11 +614,7 @@ class Orchestrator(QObject):
         self.state_manager.set_state(AssistantState.PROCESSING)
 
         # Notify user on UI
-        cursor = self.view.output_display.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        prefix = "" if not self.view.output_display.toPlainText().strip() else "<br/>"
-        cursor.insertHtml(f"{prefix}<span style='color: #F59E0B;'><i>[LIA: Procesando grabación de voz...]</i></span>")
-        self.view.output_display.ensureCursorVisible()
+        self.view.chat.add_system("Procesando grabación de voz…", "warning")
 
         # Launch background transcription QThread
         self.transcription_worker = TranscriptionWorker(audio_path)
@@ -657,11 +630,7 @@ class Orchestrator(QObject):
 
         if not text:
             # Fallback to idle if silence or audio couldn't resolve
-            cursor = self.view.output_display.textCursor()
-            cursor.movePosition(cursor.MoveOperation.End)
-            prefix = "" if not self.view.output_display.toPlainText().strip() else "<br/>"
-            cursor.insertHtml(f"{prefix}<span style='color: #F87171;'><i>[LIA: No se detectó voz clara. Intente de nuevo.]</i></span>")
-            self.view.output_display.ensureCursorVisible()
+            self.view.chat.add_system("No se detectó voz clara. Inténtalo de nuevo.", "error")
             self.state_manager.set_state(AssistantState.IDLE)
             return
 
@@ -681,11 +650,7 @@ class Orchestrator(QObject):
         logging.getLogger("lia").warning("Error de audio: %s", err_msg)
         self.view.set_recording_active(False)
         self.state_manager.set_state(AssistantState.IDLE)
-
-        cursor = self.view.output_display.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        cursor.insertHtml(f"<br/><span style='color: #F87171;'><b>Error de Audio:</b> {err_msg}</span><br/>")
-        self.view.output_display.ensureCursorVisible()
+        self.view.chat.add_system(f"Error de audio: {err_msg}", "error")
 
     def open_settings(self):
         """Abre el panel de Ajustes (perfil, conexion, voz y microfono)."""
@@ -709,7 +674,7 @@ class Orchestrator(QObject):
         if v.get("mic_id") is not None:
             self.active_mic_id = v["mic_id"]
         # Refrescar el saludo con el nuevo nombre si el panel esta vacio
-        if not self.view.output_display.toPlainText().strip():
+        if self.view.chat.is_empty():
             self.show_welcome_greeting()
 
     def _list_microphones(self):
@@ -750,7 +715,9 @@ class Orchestrator(QObject):
                 self.active_mic_id,
                 tts_enabled,
                 self.toggle_tts,
-                self.select_microphone
+                self.select_microphone,
+                sound_enabled=self.reminder_sound_enabled,
+                sound_callback=self.toggle_reminder_sound,
             )
         except Exception as e:
             print(f"[Orchestrator] Error al listar los micrófonos del sistema: {e}")
@@ -762,10 +729,7 @@ class Orchestrator(QObject):
         service.set_enabled(new_state)
 
         status_msg = "activada" if new_state else "desactivada"
-        cursor = self.view.output_display.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        cursor.insertHtml(f"<br/><span style='color: #818CF8;'><i>[Sistema: Respuesta por voz {status_msg}]</i></span><br/>")
-        self.view.output_display.ensureCursorVisible()
+        self.view.chat.add_system(f"Respuesta por voz {status_msg}", "info")
         print(f"[Orchestrator] Respuesta por voz (TTS) cambiada a: {new_state}")
 
     def select_microphone(self, device_id):
@@ -778,10 +742,7 @@ class Orchestrator(QObject):
         except Exception:
             name = f"Dispositivo {device_id}"
 
-        cursor = self.view.output_display.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        cursor.insertHtml(f"<br/><span style='color: #818CF8;'><i>[Sistema: Micrófono activo cambiado a '{name}']</i></span><br/>")
-        self.view.output_display.ensureCursorVisible()
+        self.view.chat.add_system(f"Micrófono activo: {name}", "info")
         print(f"[Orchestrator] Micrófono de entrada cambiado a ID {device_id} ({name})")
 
     def play_speech_audio(self, path: str):

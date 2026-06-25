@@ -13,6 +13,34 @@ def _looks_like_url(text: str) -> bool:
     return t.startswith("http://") or t.startswith("https://") or t.startswith("www.")
 
 
+def _is_noteworthy_clip(text: str) -> bool:
+    """
+    ¿Merece la pena ofrecer guardar esto? Evita saltar con copias rutinarias
+    (un trozo de código, una frase corta). Sí si: es una URL, es texto multilínea
+    sustancial (lista/párrafo) o es texto largo de una línea.
+    """
+    t = text.strip()
+    if not t:
+        return False
+    if _looks_like_url(t):
+        return True
+    if "\n" in t and len(t) >= 60:
+        return True
+    return len(t) >= 100
+
+
+def _app_of(title: str) -> str:
+    """
+    Extrae el nombre de la app del título de ventana (lo que va tras el último
+    separador). Así 'documento.py — VS Code' y 'otro.py — VS Code' cuentan como la
+    MISMA app y el contador de foco no se reinicia al cambiar de pestaña/archivo.
+    """
+    for sep in (" — ", " – ", " - "):
+        if sep in title:
+            return title.rsplit(sep, 1)[-1].strip()
+    return title.strip()
+
+
 def _short(text: str, limit: int = 50) -> str:
     t = " ".join(text.split())
     return t if len(t) <= limit else t[: limit - 1] + "…"
@@ -44,7 +72,7 @@ class ProactiveEngine(QObject):
     def __init__(
         self,
         global_cooldown_s: float = 300.0,
-        note_gap_s: float = 45 * 60.0,
+        note_gap_s: float = 60 * 60.0,
         focus_gap_s: float = 30 * 60.0,
         present_idle_max_s: float = 120.0,
         eod_hour: int = 19,
@@ -76,7 +104,7 @@ class ProactiveEngine(QObject):
 
         self._last_clip_suggested = None
 
-        self._focus_window = None
+        self._focus_app = None
         self._focus_since = now
         self._focus_suggested_for = None
 
@@ -125,6 +153,9 @@ class ProactiveEngine(QObject):
     def on_clipboard_changed(self, text: str):
         if text == self._last_clip_suggested:
             return
+        # No molestar con copias rutinarias: solo si de verdad parece nota
+        if not _is_noteworthy_clip(text):
+            return
         if _looks_like_url(text):
             msg = "Copiaste un enlace. ¿Lo guardo en tu vault?"
             prefill = "Crea una nota con este enlace de mi portapapeles y etiquétalo."
@@ -136,9 +167,13 @@ class ProactiveEngine(QObject):
             self._last_clip_suggested = text
 
     def on_active_window_changed(self, title: str):
-        self._focus_window = title
-        self._focus_since = time.monotonic()
-        self._focus_suggested_for = None
+        # Reinicia el contador de foco solo si cambió la APP (no al cambiar de
+        # pestaña/archivo dentro de la misma app).
+        app = _app_of(title)
+        if app != self._focus_app:
+            self._focus_app = app
+            self._focus_since = time.monotonic()
+            self._focus_suggested_for = None
 
     def on_tick(self, window: str, idle_seconds: float):
         self._roll_day()
@@ -157,17 +192,18 @@ class ProactiveEngine(QObject):
                 self._eod_suggested_date = self._today
                 return
 
-        if (present and window and window == self._focus_window
-                and self._focus_suggested_for != window
+        cur_app = _app_of(window) if window else ""
+        if (present and cur_app and cur_app == self._focus_app
+                and self._focus_suggested_for != cur_app
                 and now - self._focus_since >= self.focus_gap_s):
-            app = _short(window, 32)
+            app = _short(cur_app, 32)
             if self._emit(
                 "focus", _now_features(),
                 f"Llevas un buen rato en «{app}». ¿Anotamos en qué avanzaste?",
                 "Quiero anotar en qué he avanzado en lo que estoy trabajando: ",
                 auto_submit=False, mood="reminder",
             ):
-                self._focus_suggested_for = window
+                self._focus_suggested_for = cur_app
                 return
 
         if (present and not self._idle_note_suggested

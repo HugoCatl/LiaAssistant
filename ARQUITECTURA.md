@@ -1,16 +1,16 @@
 # 🏗️ LIA Assistant — Documento Técnico de Arquitectura
 
-Este documento describe **toda la tecnología que usa LIA y qué hace cada pieza**. Sirve como referencia para entender el sistema de un vistazo: qué librería resuelve qué problema, cómo se reparten las responsabilidades por capas y cómo fluyen los datos.
+Describe **toda la tecnología que usa LIA y qué hace cada pieza**: qué librería resuelve qué problema, cómo se reparten las responsabilidades por capas y cómo fluyen los datos.
 
 ---
 
 ## 1. Visión general
 
-LIA es una aplicación de escritorio **Python + PyQt6** estructurada por capas (Separation of Concerns). Combina servicios en la nube (modelo de lenguaje) con cómputo **100% local** para todo lo sensible: voz, embeddings y aprendizaje del feedback.
+LIA es una aplicación de escritorio **Python + PyQt6** estructurada por capas. Combina un servicio en la nube (el modelo de lenguaje) con cómputo **100% local** para todo lo sensible: voz, embeddings, clustering y aprendizaje del feedback. Se distribuye como **un único `.exe`** (PyInstaller) que se **autoinstala** en el primer arranque.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                        main.py (arranque)                     │
+│   main.py  →  self_install (1er arranque)  →  onboarding      │
 └──────────────────────────────┬───────────────────────────────┘
                                │
                  ┌─────────────▼─────────────┐
@@ -21,13 +21,13 @@ LIA es una aplicación de escritorio **Python + PyQt6** estructurada por capas (
         ┌───────────▼──┐  ┌────▼─────┐  ┌▼───────────────┐
         │     gui/     │  │   io/    │  │   services/    │
         │ orbe, panel, │  │ teclado, │  │ gemini, voz,   │
-        │ burbuja      │  │ audio    │  │ proactivo, ML, │
-        │              │  │          │  │ semántico      │
+        │ burbujas,    │  │ audio    │  │ proactivo, ML, │
+        │ bandeja      │  │          │  │ semántico…     │
         └──────────────┘  └──────────┘  └───┬────────────┘
                                             │
                                    ┌────────▼────────┐
                                    │    storage/     │
-                                   │ Obsidian Vault  │
+                                   │  Notas .md      │
                                    └─────────────────┘
 ```
 
@@ -38,109 +38,125 @@ LIA es una aplicación de escritorio **Python + PyQt6** estructurada por capas (
 | Tecnología | Rol en LIA | Local / Nube |
 | :--- | :--- | :--- |
 | **Python 3.10+** | Lenguaje base. | — |
-| **PyQt6** | Framework de GUI: ventana sin marcos, orbe (QPainter con gradientes), señales/slots, hilos (`QThread`), reproducción de audio (`QtMultimedia`). | Local |
-| **google-genai** | Cliente del modelo de lenguaje **Gemini** (Flash y Pro), con *streaming* y *function calling* (tool-calling). Es el cerebro conversacional. | Nube |
-| **faster-whisper** | Transcripción de voz a texto (STT) en local, CPU, cuantización INT8. La voz nunca sale del equipo. | Local |
-| **edge-tts** | Síntesis de voz (TTS) con voces neuronales de Microsoft Edge. | Nube |
-| **sounddevice** | Captura de audio del micrófono a 16 kHz mono. | Local |
-| **pynput** | Escucha del atajo global de teclado (`Shift_L + L`) en segundo plano. | Local |
-| **fastembed** | Embeddings de texto vía **ONNX Runtime** (sin PyTorch). Convierte notas y consultas en vectores para la búsqueda semántica. Modelo multilingüe pequeño (≈0.22 GB). | Local |
-| **numpy** | Álgebra para la búsqueda por coseno y para la regresión logística del score de relevancia. | Local |
-| **sqlite3** (stdlib) | Persistencia del feedback proactivo (Sí/Ahora no). | Local |
-| **Pillow** | Captura de pantalla (`ImageGrab`) como contexto visual para Gemini. | Local |
-| **pyperclip** | Lectura/escritura del portapapeles de Windows. | Local |
-| **pydantic / pydantic-settings** | Validación tipada de la configuración desde `.env`. | Local |
-| **python-dotenv** | Carga del archivo `.env`. | Local |
-| **pytest** | Suite de pruebas automatizadas. | Local |
-| **Obsidian** (externo) | Almacén final del conocimiento: notas Markdown con enlaces `[[...]]`. | Local |
+| **PyQt6** | GUI: ventana sin marcos, orbe (QPainter + gradientes), señales/slots, hilos (`QThread`), audio (`QtMultimedia` para TTS y `QSoundEffect` para el chime). | Local |
+| **google-genai** | Cliente de **Gemini** (Flash y Pro) con *streaming* y *function calling* (tool-calling). El cerebro conversacional. | Nube |
+| **faster-whisper** | Transcripción de voz (STT) en local, CPU, INT8. La voz nunca sale del equipo. | Local |
+| **edge-tts** | Síntesis de voz (TTS) con voces neuronales. | Nube |
+| **sounddevice** | Captura de micrófono a 16 kHz mono. | Local |
+| **pynput** | Atajo global de teclado (`Shift_L + L`) en segundo plano. | Local |
+| **fastembed** | Embeddings vía **ONNX Runtime** (sin PyTorch). Vectoriza notas y consultas. Modelo multilingüe (~0.22 GB). | Local |
+| **numpy** | Coseno para la búsqueda, KMeans del clustering y la regresión logística del scorer. | Local |
+| **sqlite3** (stdlib) | Persistencia del feedback proactivo. | Local |
+| **Pillow** | Captura de pantalla (`ImageGrab`) como contexto visual; genera el icono. | Local |
+| **pyperclip** | Lectura/escritura del portapapeles. | Local |
+| **pydantic / pydantic-settings / python-dotenv** | Configuración tipada desde `.env`. | Local |
+| **PyInstaller** | Empaqueta todo (intérprete + librerías) en un único `LIA.exe`. | Local |
+| **pytest** | Suite de pruebas (~100). | Local |
+| **Obsidian** (*opcional*, externo) | Visor del grafo de notas. **No es requisito**: las notas son `.md` planos. | Local |
 
 ---
 
 ## 3. Capas y módulos (qué hace cada archivo)
 
-### 3.1. Núcleo (`src/core/`)
-- **`orchestrator.py`** — Patrón **Mediator**. Es el director de orquesta: recibe el atajo de teclado, gestiona la voz (grabación → Whisper → Gemini → TTS), lanza los *workers* de Gemini, actualiza la UI y el estado, y conecta el sistema proactivo (monitor → motor → burbuja → mascota).
-- **`state_manager.py`** — Máquina de estados finita con 4 estados (`IDLE`, `LISTENING`, `PROCESSING`, `RESPONDING`). Emite señales Qt cuando cambia; la UI y el orbe reaccionan a ellas.
+### 3.1. Arranque (`main.py`, `src/bootstrap/`)
+- **`main.py`** — Orquesta el arranque: auto-instalación → onboarding (si falta config) → pantalla de carga → construcción de componentes → bandeja → arranque.
+- **`bootstrap/self_install.py`** — Si el `.exe` se ejecuta desde fuera de su carpeta (p. ej. Descargas), se **copia a `%LOCALAPPDATA%/Programs/LIA`**, crea accesos directos (escritorio + inicio) y se registra en "Agregar o quitar programas". Idempotente y silencioso; no actúa en desarrollo.
 
-### 3.2. Presentación (`src/gui/`)
-- **`view.py`** — Panel principal: ventana **glassmorphic** translúcida y sin marcos, arrastrable, con campo de entrada y área de respuesta en *streaming*.
-- **`orb_mascot.py`** — La presencia de Lia en el escritorio. Orbe minimalista dibujado con `QRadialGradient`/`QConicalGradient`: núcleo con volumen, halo rotatorio (hipnótico), respiración y efectos por estado (ondas al escuchar, spinner al pensar, anillos al hablar, pip al recordar). Sin assets ni licencias.
-- **`mascot_behavior.py`** — **Mixin** con el comportamiento de ventana: colocación en el borde, clic vs. arrastre y *snap* al borde de pantalla.
-- **`mascot_factory.py`** — Construye la mascota (`make_mascot()`), punto único de creación.
-- **`components/`** — `input_field.py`, `output_display.py` y **`mascot_bubble.py`** (la burbuja "Sí / Ahora no" de las sugerencias proactivas, con auto-descarte).
+### 3.2. Núcleo (`src/core/`)
+- **`orchestrator.py`** — Patrón **Mediator**. Recibe el atajo, gestiona la voz (grabación → Whisper → Gemini → TTS), lanza los *workers* de Gemini **con memoria conversacional**, actualiza la UI y el estado, conecta el sistema proactivo y reproduce el chime de recordatorios.
+- **`state_manager.py`** — Máquina de estados (`IDLE`, `LISTENING`, `PROCESSING`, `RESPONDING`). Emite señales Qt; la UI y el orbe reaccionan.
 
-### 3.3. Percepción de hardware (`src/io/`)
-- **`audio_recorder.py`** — Captura de micrófono en hilo aparte con **VAD** (detección de actividad de voz): arranca al hablar, para tras un silencio.
-- **`keyboard_listener.py`** — Atajo global (`QThread` + `pynput`) que muestra/oculta el panel desde cualquier app.
+### 3.3. Presentación (`src/gui/`)
+- **`view.py`** — Panel principal **glassmorphic** translúcido, sin marcos, arrastrable. `Esc` lo oculta.
+- **`orb_mascot.py`** — La presencia: orbe dibujado con `QRadialGradient`/`QConicalGradient`, con efectos por estado. Sin assets ni licencias.
+- **`mascot_behavior.py`** — Mixin de ventana: colocación, clic vs. doble-clic vs. arrastre, *snap* al borde.
+- **`onboarding.py`** — Diálogo de bienvenida/ajustes: nombre, clave de Gemini y carpeta de notas (se crea sola); en modo ajustes, además voz y micrófono. Escribe el `.env`.
+- **`tray_icon.py`** — Icono de bandeja: mostrar/ocultar y **salir** de verdad.
+- **`splash.py`** — Pantalla de carga con barra (cubre la carga de los módulos pesados).
+- **`chime.py`** — Sintetiza el sonido de recordatorio (dos notas con envolvente) en un WAV; sin assets externos.
+- **`md_render.py`** — Convierte el Markdown de las respuestas a HTML de Qt (negritas, listas, código, enlaces).
+- **`components/`**:
+  - **`chat_view.py`** — Conversación con **burbujas reales** (`QScrollArea`): usuario a la derecha, Lia a la izquierda con mini-orbe. *Streaming* token a token, indicador "escribiendo…", timestamps y Markdown al cerrar el turno.
+  - **`info_panel.py`** — Popup de acciones rápidas (ejemplos + acciones) con secciones y filas icono/título/subtítulo.
+  - **`input_field.py`** — Campo de entrada *pill*; `↑` recupera el último mensaje.
+  - **`mascot_bubble.py`** / **`reminder_bubble.py`** — Burbujas proactiva ("Sí / Ahora no") y de recordatorio ("Listo / Posponer").
 
-### 3.4. Servicios (`src/services/`)
+### 3.4. Percepción de hardware (`src/io/`)
+- **`audio_recorder.py`** — Micrófono en hilo aparte con **VAD** (arranca al hablar, para tras un silencio).
+- **`keyboard_listener.py`** — Atajo global (`QThread` + `pynput`).
+
+### 3.5. Servicios (`src/services/`)
 
 **Conversación y voz**
-- **`gemini_service.py`** — Dos *workers* `QThread`: **Flash** (acción rápida, captura, automatización) y **Pro** (razonamiento/mentoría). Hacen *streaming* token a token y **tool-calling**: el modelo invoca funciones Python (notas, portapapeles, apps, búsqueda) que se ejecutan localmente y se le devuelven.
-- **`whisper_local.py`** — Worker de transcripción local con faster-whisper.
-- **`tts_service.py`** — Síntesis de voz con Edge-TTS (singleton, sanea el texto antes de hablar).
-- **`os_automation.py`** — Abrir aplicaciones de Windows y leer/escribir el portapapeles.
+- **`gemini_service.py`** — Dos *workers* `QThread`: **Flash** (acción) y **Pro** (razonamiento). *Streaming* + **tool-calling** (el modelo invoca funciones Python locales) y **memoria conversacional** acotada entre turnos.
+- **`whisper_local.py`** — Transcripción local con faster-whisper.
+- **`tts_service.py`** — Voz de respuesta (Edge-TTS, singleton).
+- **`os_automation.py`** — Abrir apps y portapapeles.
+- **`conversation_store.py`** — Persiste el historial de la conversación (JSON) para recuperarlo entre sesiones.
 
-**Sistema proactivo (Fase 2 + ML de Fase 3)**
-- **`system_monitor.py`** — Sondea cada pocos segundos el **portapapeles**, el **título de la ventana activa** (`ctypes`/Win32) y los **segundos de inactividad** (`GetLastInputInfo`). Emite señales solo ante cambios relevantes.
-- **`proactive_engine.py`** — **Decide CUÁNDO sugerir**. Aplica reglas (portapapeles, foco prolongado ≥30 min, inactividad, fin de día) con *cooldowns*, y antes de emitir consulta al **score de relevancia**. Si el modelo predice rechazo, Lia se calla.
-- **`relevance_scorer.py`** — **Regresión logística** (numpy puro, sin sklearn) que predice `P(aceptar)` a partir de features interpretables (tipo de sugerencia *one-hot* + hora, longitud, es-URL…). *Warmup* de 10 ejemplos antes de filtrar.
-- **`feedback_store.py`** — Persiste cada Sí/Ahora no en **SQLite** local (`%LOCALAPPDATA%/LiaAssistant/feedback.db`). Es la fuente de entrenamiento del scorer.
+**Sistema proactivo (reglas + ML)**
+- **`system_monitor.py`** — Sondea portapapeles, **app activa** (`ctypes`/Win32) e **inactividad** (`GetLastInputInfo`).
+- **`proactive_engine.py`** — Decide **CUÁNDO sugerir**: reglas (portapapeles *note-worthy*, foco prolongado **por app**, inactividad, fin de día) con *cooldowns*, filtradas por el scorer.
+- **`relevance_scorer.py`** — **Regresión logística** (numpy puro) que predice `P(aceptar)`. *Warmup* de 10 ejemplos antes de filtrar.
+- **`feedback_store.py`** — Persiste cada Sí/Ahora no en **SQLite**; entrena al scorer.
+- **`reminder_service.py` / `reminders.py`** — Recordatorios con hora ("recuérdame… a las…").
 
-**Memoria semántica (Fase 3)**
-- **`semantic_index.py`** — Índice vectorial del vault. Recorre las notas `.md`, las embebe (fastembed/ONNX), persiste los vectores y reconstruye **incrementalmente por `mtime`**. Búsqueda por **similitud de coseno**. El embebedor es intercambiable (stub determinista en tests).
-- **`semantic_search.py`** — Expone la herramienta `search_notes_semantic(query)` que usa Gemini para buscar por significado. Si el modelo no está disponible, **cae a búsqueda por palabra clave**.
+**Memoria semántica e inteligencia del vault**
+- **`semantic_index.py`** — Índice vectorial: embebe las notas `.md` (fastembed/ONNX), persiste vectores y reconstruye **incrementalmente por `mtime`**. Búsqueda por **coseno**. Embebedor intercambiable (stub en tests).
+- **`semantic_search.py`** — Herramienta `search_notes_semantic(query)`; cae a búsqueda por palabra si el modelo no está.
+- **`auto_link.py`** — Al crear una nota, busca las afines por significado y añade una sección **`🔗 Relacionado`** con enlaces `[[ ]]`. Idempotente y a prueba de fallos.
+- **`topic_clusters.py`** — Clustering de **temas latentes** (KMeans esférico en numpy) sobre los vectores. Herramienta `get_note_clusters()`.
+- **`daily_summary.py`** — Herramienta `get_todays_activity()`: recopila lo capturado hoy y sus conexiones; Gemini redacta el digest y lo guarda como `Diario AAAA-MM-DD`.
 
-**Clustering de temas (Fase 3B)**
-- **`topic_clusters.py`** — Agrupa las notas en **temas latentes** reutilizando los vectores del índice semántico. KMeans esférico (coseno) en numpy puro. Expone la herramienta `get_note_clusters()`: descubre patrones ("tienes N notas sobre X"), etiqueta cada tema con su nota más representativa.
+### 3.6. Persistencia (`src/storage/`)
+- **`obsidian_manager.py`** — CRUD de notas: `create_note` (con auto-enlazado y auto-tags), `read_note`, `write_note`, `append_to_note`, **`editar_nota`** (edición fina buscar/reemplazar) y `search_notes`. Genera *frontmatter* YAML, **normaliza etiquetas** de entidades, evita duplicados y protege contra escapes de directorio.
 
-**Resumen diario (Fase 4)**
-- **`daily_summary.py`** — Expone la herramienta `get_todays_activity()`: recopila las notas capturadas **hoy** (por `mtime`) y, con el índice semántico, descubre sus **conexiones con notas anteriores**. Devuelve datos a Gemini, que redacta el digest y lo guarda como nota `Diario AAAA-MM-DD`. La herramienta no llama al LLM (evita recursión/coste).
-
-### 3.5. Persistencia (`src/storage/`)
-- **`obsidian_manager.py`** — CRUD sobre el Vault: `create_note`, `read_note`, `write_note`, `append_to_note` y `search_notes` (por palabra). Genera *frontmatter* YAML, evita duplicados y protege contra escapes de directorio.
-
-### 3.6. Configuración (`config/`)
-- **`settings.py`** — Modelo Pydantic que valida y tipa todas las variables de `.env` (claves de Gemini, ruta del vault, voz, flags proactivos…).
+### 3.7. Configuración y rutas (`config/`)
+- **`settings.py`** — Modelo Pydantic que valida el `.env`.
+- **`paths.py`** — Centraliza las rutas de datos en `%LOCALAPPDATA%/LiaAssistant` (config, historial, feedback, logs); el `.env` vive ahí en el `.exe` y en la raíz en desarrollo.
+- **`logging_setup.py`** — Log a fichero (`lia.log`) + traducción de excepciones a mensajes legibles.
 
 ---
 
 ## 4. Flujos de datos principales
 
-**a) Captura por texto/voz**
+**a) Captura por texto/voz (con memoria)**
 ```
 Atajo/Orbe → panel → (voz: micrófono → VAD → Whisper local) → texto
-   → GeminiWorker (Flash/Pro, streaming + tool-calling)
-   → ejecuta herramientas locales (Obsidian / portapapeles / apps / búsqueda)
-   → respuesta en streaming → TTS (Edge) → orbe vuelve a IDLE
+   → GeminiWorker (Flash/Pro) con historial previo, streaming + tool-calling
+   → ejecuta herramientas locales (notas / portapapeles / apps / búsqueda)
+   → burbuja de Lia (streaming → Markdown) → TTS → historial persistido → IDLE
 ```
 
 **b) Recordatorio proactivo (con aprendizaje)**
 ```
-SystemMonitor (portapapeles/ventana/inactividad)
+SystemMonitor (portapapeles/app/inactividad)
    → ProactiveEngine (reglas + cooldown)
-   → RelevanceScorer.predict()  ── ¿P(aceptar) ≥ umbral? ──┐
-        sí → burbuja "Sí / Ahora no" junto al orbe          │
-        no → Lia se calla                                    │
-   → feedback del usuario → FeedbackStore (SQLite) → reentrena el scorer
+   → RelevanceScorer.predict() ── ¿P(aceptar) ≥ umbral? ──┐
+        sí → burbuja "Sí / Ahora no" + chime               │
+        no → Lia se calla                                   │
+   → feedback → FeedbackStore (SQLite) → reentrena el scorer
 ```
 
-**c) Búsqueda semántica**
+**c) Crear nota con auto-enlazado**
 ```
-Pregunta conceptual → Gemini llama a search_notes_semantic()
-   → SemanticIndex.build() (incremental) → embeddings ONNX
-   → similitud de coseno → notas más afines → respuesta
+create_note() → frontmatter + auto-tags de entidades
+   → auto_link.find_related (índice semántico, coseno)
+   → añade sección 🔗 Relacionado [[ ]] → escribe el .md
 ```
 
 ---
 
 ## 5. Decisiones de diseño relevantes
 
-- **Orbe en vez de personaje**: máxima profesionalidad, cero dependencias de arte/licencias y control total del render. Se descartaron las mascotas tipo personaje (gato QPainter y Live2D) para no añadir peso ni distracción a una herramienta de productividad.
-- **fastembed (ONNX) en vez de sentence-transformers (PyTorch)**: evita arrastrar +1 GB de dependencias; viable para distribuir.
-- **Regresión logística manual (numpy) en vez de scikit-learn**: cero peso extra e **interpretable** (se puede ver por qué Lia decide callar).
-- **Todo lo sensible en local**: voz, embeddings y aprendizaje no salen del equipo; al modelo de lenguaje solo va la conversación.
+- **`.exe` autoinstalable**: un único archivo que al primer doble clic se copia, crea accesos y se registra. Cero fricción de distribución (sin zip, sin .bat, sin Python).
+- **Orbe en vez de personaje**: profesionalidad, cero dependencias de arte/licencias y control total del render. Se descartaron gato (QPainter) y Live2D.
+- **Obsidian opcional**: las notas son `.md` planos; el usuario no necesita instalar nada para usar LIA.
+- **fastembed (ONNX) en vez de sentence-transformers (PyTorch)**: evita arrastrar +1 GB; viable para distribuir.
+- **Regresión logística manual (numpy) en vez de scikit-learn**: cero peso extra e **interpretable**.
+- **Todo lo sensible en local**: voz, embeddings, clustering y aprendizaje no salen del equipo.
 - **Reconstrucción incremental del índice**: barata en cada arranque/búsqueda (solo re-embebe lo que cambió).
+- **Memoria conversacional acotada**: se conservan los últimos turnos para dar contexto sin disparar el coste de tokens.
 
 ---
 
@@ -148,36 +164,18 @@ Pregunta conceptual → Gemini llama a search_notes_semantic()
 
 | Fase | Contenido | Estado |
 | :--- | :--- | :--- |
-| **1 — Presencia** | Orbe minimalista state-reactive en el escritorio. | ✅ |
-| **2 — Proactividad** | Monitor de sistema + motor de reglas + burbuja no invasiva. | ✅ |
-| **3A — Búsqueda semántica** | Búsqueda local del vault por significado (fastembed). | ✅ |
-| **3B — Score que aprende** | Relevancia que aprende del feedback (regresión logística). | ✅ |
-| **3C — Clustering** | Descubrimiento de temas latentes (KMeans sobre embeddings). | ✅ |
-| **3D — Auto-tags** | Etiquetado de entidades (persona/proyecto/lugar) vía Gemini. | ✅ |
-| **4 — Resumen diario** | Digest que conecta capturas de hoy con notas anteriores. | ✅ |
-| **4.5 — Pulido profesional** | Ajustes in-app, bandeja del sistema, onboarding, historial… (ver §7). | ⏳ Pendiente |
-| **5 — Producto** | Instalador `.exe`, arranque con Windows, distribución. | ⏳ Pendiente |
+| **1 — Presencia** | Orbe minimalista state-reactive. | ✅ |
+| **2 — Proactividad** | Monitor + motor de reglas + burbuja, con anti-spam. | ✅ |
+| **3A — Búsqueda semántica** | Búsqueda local del vault por significado. | ✅ |
+| **3B — Score que aprende** | Relevancia aprendida del feedback (regresión logística). | ✅ |
+| **3C — Clustering** | Temas latentes (KMeans sobre embeddings). | ✅ |
+| **3D — Auto-tags** | Etiquetado de entidades vía Gemini. | ✅ |
+| **3E — Auto-enlazado** | Conexión automática de notas afines. | ✅ |
+| **4 — Resumen diario** | Digest que conecta lo de hoy con notas anteriores. | ✅ |
+| **4.5 — Pulido** | Burbujas de chat, Markdown, onboarding, bandeja, historial, errores legibles, log, chime, atajos, edición fina. | ✅ |
+| **5 — Producto** | `.exe` autoinstalable (PyInstaller) + onboarding plug-and-play. | ✅ |
 
----
-
-## 7. Fase 4.5 — Pulido profesional (backlog priorizado)
-
-Mejoras de bajo coste y alto impacto en la percepción de "producto", **antes** del empaquetado de la Fase 5. Ordenadas por ratio valor/esfuerzo.
-
-### Tier 1 — Quick wins (≈1–2 h)
-1. **Icono en la bandeja del sistema** (`QSystemTrayIcon`): mostrar/ocultar, abrir ajustes y **salir** de verdad. Comportamiento esperable de toda app de escritorio.
-2. **Onboarding de primer arranque**: si falta `GEMINI_API_KEY` o `OBSIDIAN_VAULT_PATH`, un diálogo amable para configurarlos en vez de un error.
-3. **Manejo elegante de errores**: mensajes claros (API caída, sin red, clave inválida) en lugar de excepciones crudas.
-4. **Log a fichero**: diagnóstico en `%LOCALAPPDATA%/LiaAssistant/lia.log` (rotativo).
-5. **Arranque con Windows** (opcional): acceso directo en la carpeta de inicio, con toggle.
-
-### Tier 2 — Media jornada, alto impacto
-6. **Panel de Ajustes in-app**: editar clave, vault, nombre/perfil, voz TTS, color de acento y flags proactivos **sin tocar `.env`**. Con botón "Probar" para validar clave/vault.
-7. **Historial de conversación persistente**: al reabrir el panel se recupera el contexto reciente (SQLite local).
-8. **Render Markdown en las respuestas**: negritas, listas y bloques de código (gran salto visual sobre el texto plano actual).
-9. **Modo captura rápida**: atajo → escribes → Enter guarda la nota al instante, sin abrir conversación.
-
-### Tier 3 — Toques finos (pequeños)
-10. **Selector de color de acento**: unifica orbe + panel; personalización con sensación premium.
-11. **Acciones en la respuesta**: "Copiar" y "Abrir en Obsidian".
-12. **Diálogo Acerca de / versión**.
+### Pendiente / ideas futuras
+- Captura rápida (atajo → escribir → guardar sin abrir conversación).
+- Selector de color de acento; acciones "Copiar / Abrir en Obsidian" en cada burbuja.
+- Firma del ejecutable (evitar el aviso de SmartScreen) y opción de LLM local para privacidad total.
