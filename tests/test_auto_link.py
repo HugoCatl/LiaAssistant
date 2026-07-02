@@ -70,3 +70,34 @@ def test_no_related_returns_unchanged(index):
 def test_disabled_by_env(index, monkeypatch):
     monkeypatch.setenv("LIA_DISABLE_AUTOLINK", "1")
     assert auto_link.find_related_titles("camara foto", index=index) == []
+
+
+def test_backlink_written_into_target(index, tmp_path, monkeypatch):
+    """append_related_links deja el enlace de vuelta en la nota destino."""
+    from unittest.mock import patch as _patch
+    from config import settings
+    vault = tmp_path / "vault"
+    with _patch.object(settings, "obsidian_vault_path", vault):
+        out = auto_link.append_related_links(
+            "Nueva camara", "Nota sobre una camara y su foto.", index=index)
+        assert "[[Camaras IA]]" in out
+        target = (vault / "Camaras IA.md").read_text(encoding="utf-8")
+        assert "[[Nueva camara]]" in target          # enlace de vuelta real
+
+
+def test_backlink_is_idempotent(index, tmp_path):
+    from unittest.mock import patch as _patch
+    from config import settings
+    vault = tmp_path / "vault"
+    with _patch.object(settings, "obsidian_vault_path", vault):
+        assert auto_link.add_backlink("Camaras IA", "Otra nota") is True
+        assert auto_link.add_backlink("Camaras IA", "Otra nota") is False  # ya estaba
+        body = (vault / "Camaras IA.md").read_text(encoding="utf-8")
+        assert body.count("[[Otra nota]]") == 1
+
+
+def test_backlink_missing_target_is_safe(index, tmp_path):
+    from unittest.mock import patch as _patch
+    from config import settings
+    with _patch.object(settings, "obsidian_vault_path", tmp_path / "vault"):
+        assert auto_link.add_backlink("No Existe", "X") is False

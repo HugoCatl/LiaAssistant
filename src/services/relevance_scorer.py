@@ -22,7 +22,10 @@ KINDS = ("clipboard", "focus", "note_gap", "eod", "demo")
 # Features numéricas opcionales (en [0,1]). 0 si la sugerencia no tiene esa feature.
 NUMERIC_FEATURES = ("hour_norm", "clip_len_norm", "is_url", "is_work_hours")
 
-MIN_TRAIN = 10        # mínimo de ejemplos antes de empezar a filtrar
+# Mínimo de ejemplos antes de empezar a filtrar. 6 en vez de 10: con 10 el
+# aprendizaje tardaba días en activarse (arrancaba "ciego"); con 6 y la
+# regularización L2 el modelo ya filtra patrones claramente rechazados antes.
+MIN_TRAIN = 6
 DEFAULT_THRESHOLD = 0.35  # P(aceptar) por debajo -> silenciar
 
 

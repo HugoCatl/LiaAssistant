@@ -501,10 +501,15 @@ class View(QWidget):
         """Hides the assistant overlay, keeping the background process alive."""
         self.hide()
 
+    # Hook opcional (lo instala el orquestador): si devuelve True, consumió el Esc
+    # (p. ej. cancelando la generación en curso) y el panel no se oculta.
+    escape_handler = None
+
     def keyPressEvent(self, event):
-        """Esc oculta el panel (sin cerrar la app)."""
+        """Esc cancela la generación en curso o, si no hay, oculta el panel."""
         if event.key() == Qt.Key.Key_Escape:
-            self.close_requested()
+            if not (self.escape_handler and self.escape_handler()):
+                self.close_requested()
             event.accept()
             return
         super().keyPressEvent(event)

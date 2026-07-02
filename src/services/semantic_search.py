@@ -31,9 +31,11 @@ def search_notes_semantic(query: str) -> list:
     try:
         idx = _get_index()
         idx.build()  # incremental: barato si no hay notas nuevas/cambiadas
-        results = idx.search(query, top_k=5)
+        # Umbral de relevancia: mejor decir "no encontré nada" que presentar
+        # como relevantes las notas menos lejanas de un vault que no habla de eso.
+        results = idx.search(query, top_k=5, min_score=0.30)
         if not results:
-            return ["No se encontraron notas relevantes."]
+            return ["No se encontraron notas relevantes sobre eso en la memoria del usuario."]
         return [
             f"Nota: '{r['title']}' (afinidad {r['score']:.2f}) - {r['snippet']}"
             for r in results

@@ -172,8 +172,19 @@ class SemanticIndex:
 
     # ------------------------------------------------------------------ search
 
-    def search(self, query: str, top_k: int = 5):
-        """Devuelve las notas más cercanas semánticamente: [{title, score, snippet}]."""
+    def search(self, query: str, top_k: int = 5, min_score: float = 0.0,
+               recency_weight: float = 0.08, recency_half_life_days: float = 30.0):
+        """
+        Devuelve las notas más cercanas semánticamente: [{title, score, snippet}].
+
+        min_score filtra por afinidad (coseno) CRUDA: sin él, el top-k siempre
+        trae "lo menos lejano" aunque nada tenga relación real con la consulta.
+
+        recency_weight añade un empujón por frescura (decae a la mitad cada
+        `recency_half_life_days`): a igualdad de tema, la nota de ayer gana a la
+        de hace 6 meses. Es solo desempate — el umbral se aplica ANTES, sobre el
+        coseno crudo, para que la recencia nunca cuele resultados irrelevantes.
+        """
         # Build incremental en cada búsqueda: barato si nada cambió (solo stats de
         # mtime + reutiliza vectores), y mantiene el índice fresco ante notas nuevas.
         self.build()
@@ -184,12 +195,24 @@ class SemanticIndex:
         qn = _normalize(qv)[0]
         mat = _normalize(self._vectors)
         scores = mat @ qn
-        order = np.argsort(-scores)[:top_k]
+
+        import time
+        now = time.time()
+        candidates = []
+        for i in range(len(self._meta)):
+            raw = float(scores[i])
+            if raw < min_score:
+                continue
+            age_days = max(0.0, (now - self._meta[i].get("mtime", now)) / 86_400)
+            boost = recency_weight * (0.5 ** (age_days / recency_half_life_days))
+            candidates.append((raw + boost, raw, i))
+
+        candidates.sort(key=lambda c: -c[0])
         return [
             {
                 "title": self._meta[i]["title"],
-                "score": float(scores[i]),
+                "score": raw,
                 "snippet": self._meta[i]["snippet"],
             }
-            for i in order
+            for _, raw, i in candidates[:top_k]
         ]

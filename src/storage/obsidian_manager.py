@@ -1,5 +1,7 @@
 import os
 import re
+import unicodedata
+from difflib import SequenceMatcher
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List
@@ -8,6 +10,43 @@ from config import settings
 # Índice semántico global (lazy-loaded en search_notes_semantic)
 _semantic_index = None
 _semantic_available = True  # Flag para saber si fastembed está disponible
+
+def _atomic_write(path, text: str):
+    """
+    Escritura atómica: escribe a un temporal en el mismo directorio y hace
+    os.replace. Evita dejar una nota truncada/corrupta si el proceso muere a
+    mitad de la escritura (corte de luz, disco lleno, cierre forzado).
+    """
+    p = Path(path)
+    tmp = p.with_name(f".{p.name}.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, p)
+
+
+def _fold(text: str) -> str:
+    """minúsculas + sin acentos, para comparar títulos ('Óscar' ~ 'oscar')."""
+    nfkd = unicodedata.normalize("NFKD", text.lower())
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+
+def _similar_existing_title(vault, clean_title: str, threshold: float = 0.78):
+    """
+    Busca una nota existente con título CASI idéntico (Guille/Guillermo,
+    'Proyecto cámaras'/'Proyecto cámaras IA'). Evita que la misma entidad
+    acabe partida en dos nodos del grafo. Devuelve el título existente o None.
+    """
+    target = _fold(clean_title)
+    best, best_ratio = None, 0.0
+    for p in vault.iterdir():
+        if p.is_file() and p.suffix.lower() == ".md":
+            ratio = SequenceMatcher(None, target, _fold(p.stem)).ratio()
+            if ratio > best_ratio:
+                best, best_ratio = p.stem, ratio
+    return best if best_ratio >= threshold else None
+
 
 def sanitize_filename(title: str) -> str:
     """
@@ -53,16 +92,21 @@ def get_vault_path() -> Path:
     return path
 
 def create_note(title: str, content: str, tags: Optional[List[str]] = None,
-                auto_link: bool = True) -> str:
+                auto_link: bool = True, permitir_similar: bool = False) -> str:
     """
     Crea una nueva nota en formato Markdown (.md) dentro del Vault de Obsidian.
-    Si la nota ya existe, se genera un archivo nuevo añadiendo un sufijo de marca de tiempo (timestamp)
-    para evitar sobrescribir las notas existentes.
+
+    Si ya existe una nota con título muy parecido (ej: 'Guille' vs 'Guillermo'),
+    NO crea la nueva y te avisa: probablemente sea la misma entidad y debas
+    actualizarla con append_to_note/editar_nota. Si de verdad son entidades
+    distintas, repite la llamada con permitir_similar=True.
 
     Args:
         title: El título o nombre de la nota.
         content: El contenido textual de la nota.
         tags: Una lista opcional de etiquetas para clasificar la nota.
+        permitir_similar: Pon True SOLO si confirmaste que la nota parecida
+            existente es una entidad distinta de esta.
 
     Returns:
         Un mensaje de confirmación detallando si se creó con éxito y el nombre del archivo.
@@ -91,6 +135,15 @@ def create_note(title: str, content: str, tags: Optional[List[str]] = None,
         if existing_file:
             return f"Error: La nota '{existing_file}' ya existe en Obsidian. Para modificarla o sobrescribirla usa la herramienta 'write_note', o para añadir información al final usa 'append_to_note'."
 
+        # Deduplicación por similitud: la misma entidad no debe partirse en dos nodos
+        if not permitir_similar:
+            similar = _similar_existing_title(vault, clean_title)
+            if similar:
+                return (f"Atención: ya existe una nota con título muy parecido: '{similar}'. "
+                        f"Si es la misma entidad, actualízala con 'append_to_note' o 'editar_nota' "
+                        f"en lugar de crear un duplicado. Si de verdad es una entidad distinta, "
+                        f"repite create_note con permitir_similar=True.")
+
         # Crear frontmatter de tipo YAML compatible con Obsidian
         tag_lines = ""
         clean_tags = normalize_tags(tags)
@@ -105,11 +158,11 @@ def create_note(title: str, content: str, tags: Optional[List[str]] = None,
             try:
                 from src.services.auto_link import append_related_links
                 full_content = append_related_links(clean_title, full_content)
-            except Exception:
-                pass
+            except Exception as e:
+                import logging
+                logging.getLogger("lia").warning("Auto-enlazado falló en '%s': %s", clean_title, e)
 
-        with open(note_path, 'w', encoding='utf-8') as f:
-            f.write(full_content)
+        _atomic_write(note_path, full_content)
 
         return f"Nota creada exitosamente en Obsidian: '{filename}'"
     except Exception as e:
@@ -214,7 +267,20 @@ def search_notes(query: str) -> List[str]:
     except Exception as e:
         return [f"Error al realizar la búsqueda en Obsidian: {str(e)}"]
 
-def search_notes_semantic(query: str) -> List[str]:
+def _note_context(vault, title: str) -> Optional[str]:
+    """Lee la esfera de una nota (tag `contexto/X` en el frontmatter) o None."""
+    try:
+        path = _resolve_note_path(vault, title)
+        if path is None:
+            return None
+        head = path.read_text(encoding="utf-8")[:600]
+        m = re.search(r"contexto/(\w+)", head)
+        return m.group(1).lower() if m else None
+    except Exception:
+        return None
+
+
+def search_notes_semantic(query: str, contexto: Optional[str] = None) -> List[str]:
     """
     Busca notas por SIGNIFICADO (no por palabra exacta) en la memoria del usuario.
     Úsala cuando el usuario pregunte por temas, conceptos o ideas de forma abierta
@@ -223,6 +289,9 @@ def search_notes_semantic(query: str) -> List[str]:
 
     Args:
         query: La consulta o tema a buscar conceptualmente.
+        contexto: Opcional, 'trabajo' o 'personal'. Si la pregunta pertenece
+            claramente a una esfera, filtra las notas etiquetadas de la otra
+            (las notas sin esfera siempre se incluyen).
 
     Returns:
         Una lista de notas relevantes ordenadas por cercanía semántica, con un
@@ -240,15 +309,24 @@ def search_notes_semantic(query: str) -> List[str]:
             vault = get_vault_path()
             _semantic_index = SemanticIndex(vault, FastEmbedEmbedder())
 
-        results = _semantic_index.search(query, top_k=5)
+        # Con filtro de contexto pedimos más candidatos: parte se descartará
+        results = _semantic_index.search(query, top_k=10 if contexto else 5)
         if not results:
             return ["No se encontraron notas relevantes en la memoria."]
 
+        ctx = (contexto or "").strip().lower() or None
+        vault = get_vault_path()
         formatted = []
         for r in results:
             # Umbral calibrado para paraphrase-multilingual-MiniLM (coseno ~0.3+ ya es relevante)
             if r["score"] < 0.30:
                 continue
+            if ctx:
+                note_ctx = _note_context(vault, r["title"])
+                if note_ctx and note_ctx != ctx:
+                    continue  # etiquetada en la OTRA esfera; sin etiqueta pasa
+            if len(formatted) >= 5:
+                break
             formatted.append(f"Nota: '{r['title']}' (relevancia {r['score']:.0%}) - {r['snippet']}")
 
         if not formatted:
@@ -308,8 +386,7 @@ def write_note(title: str, content: str, tags: Optional[List[str]] = None) -> st
         frontmatter = f"---\ndate: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{tag_lines}\n---\n\n"
         full_content = frontmatter + content
 
-        with open(note_path, 'w', encoding='utf-8') as f:
-            f.write(full_content)
+        _atomic_write(note_path, full_content)
 
         return f"Nota '{filename}' escrita/actualizada con éxito en Obsidian."
     except Exception as e:
@@ -363,9 +440,8 @@ def append_to_note(title: str, content: str) -> str:
         if norm_new in norm_existing:
             return f"Información ya presente en la nota '{note_path.name}'. No se añadieron duplicados."
 
-        # Añadimos al final de la nota
-        with open(note_path, 'a', encoding='utf-8') as f:
-            f.write(f"\n\n{content}")
+        # Añadimos al final de la nota (reescritura completa atómica)
+        _atomic_write(note_path, f"{existing_content}\n\n{content}")
 
         return f"Contenido añadido con éxito al final de la nota '{note_path.name}'."
     except Exception as e:
@@ -423,8 +499,7 @@ def editar_nota(title: str, buscar: str, reemplazar: str) -> str:
                     f"o usa 'read_note' para verlo.")
 
         new_content = content.replace(buscar, reemplazar)
-        with open(note_path, "w", encoding="utf-8") as f:
-            f.write(new_content)
+        _atomic_write(note_path, new_content)
 
         veces = "1 coincidencia" if count == 1 else f"{count} coincidencias"
         return (f"Nota '{note_path.name}' editada: se cambió «{buscar}» por "

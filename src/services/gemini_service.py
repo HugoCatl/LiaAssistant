@@ -10,6 +10,10 @@ from src.storage.obsidian_manager import (
 )
 from src.services.daily_summary import get_todays_activity
 from src.services.topic_clusters import get_note_clusters
+from src.services.vault_gardener import (
+    revisar_memoria, marcar_entidades_distintas, ignorar_nota_suelta,
+)
+from src.services.entity_card import ficha_entidad
 from src.services.reminders import crear_recordatorio, listar_recordatorios
 
 # Map tool names to python functions for execution inside workers
@@ -21,6 +25,10 @@ TOOL_MAP = {
     "search_notes_semantic": search_notes_semantic,
     "get_todays_activity": get_todays_activity,
     "get_note_clusters": get_note_clusters,
+    "revisar_memoria": revisar_memoria,
+    "marcar_entidades_distintas": marcar_entidades_distintas,
+    "ignorar_nota_suelta": ignorar_nota_suelta,
+    "ficha_entidad": ficha_entidad,
     "write_note": write_note,
     "append_to_note": append_to_note,
     "editar_nota": editar_nota,
@@ -29,6 +37,37 @@ TOOL_MAP = {
     "crear_recordatorio": crear_recordatorio,
     "listar_recordatorios": listar_recordatorios,
 }
+
+
+def _graph_rules(profile: str) -> str:
+    """
+    Reglas de construcción del GRAFO de conocimiento, compartidas por ambos workers
+    (fuente única para que no se desincronicen). Enseñan a Lia a crear una nota por
+    entidad, enlazarlas entre sí (no solo al perfil) y propagar las relaciones a
+    todas las notas implicadas.
+    """
+    return (
+        "GRAFO DE CONOCIMIENTO (muy importante):\n"
+        "1) ENTIDAD = NOTA PROPIA. Cada persona, empresa u organización, proyecto o lugar "
+        "relevante con el que el usuario tiene relación merece su PROPIA nota (`create_note`), "
+        "no solo una etiqueta. Ej.: si menciona su empresa 'Ahora Soluciones Software', crea "
+        "una nota para esa empresa. Antes de crear, usa `search_notes` para no duplicar; si ya "
+        "existe, actualízala con `append_to_note`/`editar_nota`.\n"
+        "2) ENLACES CRUZADOS ENTRE ENTIDADES. En el CONTENIDO de cada nota (nunca en tu respuesta) "
+        "enlaza con `[[ ]]` a las OTRAS entidades relacionadas, no solo al perfil. Ej.: la nota de "
+        f"un compañero enlaza a `[[su empresa]]` y a `[[{profile}]]`; la nota de la empresa enlaza "
+        "a sus miembros; y esas notas enlazan de vuelta (bidireccional real, no solo hacia el perfil).\n"
+        "3) PROPAGA LAS RELACIONES. Cuando el usuario aporte o CAMBIE una relación (jefe, amigo, "
+        "compañero, pareja, cliente…), actualiza TODAS las notas implicadas, no una sola. Ej.: "
+        "'Guille es mi jefe' → añade ese hecho tanto en el perfil del usuario como en la nota de "
+        "Guille (con `append_to_note` o `editar_nota`). Una relación siempre vive en los dos nodos.\n"
+        "4) DETECTA CONTRADICCIONES. Antes de guardar un dato sobre una entidad, lee lo que ya hay "
+        "(`read_note`/`ficha_entidad`). Si el dato nuevo CONTRADICE lo guardado (ej.: antes "
+        "'compañero', ahora 'jefe'; una fecha distinta; otra empresa), díselo brevemente al usuario "
+        "('antes me dijiste X, ¿me quedo con Y?') y, cuando confirme, SUSTITUYE el dato viejo con "
+        "`editar_nota` en TODAS las notas donde aparezca — nunca dejes las dos versiones conviviendo.\n"
+    )
+
 
 class GeminiWorker(QThread):
     """
@@ -47,8 +86,13 @@ class GeminiWorker(QThread):
         self.image_path = image_path
         self.history = history or []          # turnos previos (memoria conversacional)
         self.result_contents = []             # conversación actualizada tras este turno
+        self._cancelled = False               # cancelación cooperativa (ver cancel())
         self.api_key = settings.gemini_api_key
         self.model_name = settings.gemini_model
+
+    def cancel(self):
+        """Pide cancelar el turno en curso; el bucle de streaming lo respeta."""
+        self._cancelled = True
 
     def run(self):
         if not self.api_key:
@@ -56,10 +100,21 @@ class GeminiWorker(QThread):
             return
 
         try:
-            client = genai.Client(api_key=self.api_key)
+            # Timeout duro por petición (evita que la UI quede en "Pensando…" para
+            # siempre si la conexión se cuelga) + 1 reintento ante errores
+            # transitorios (408/429/5xx) con backoff.
+            client = genai.Client(
+                api_key=self.api_key,
+                http_options=types.HttpOptions(
+                    timeout=120_000,  # ms
+                    retry_options=types.HttpRetryOptions(attempts=2, initial_delay=1.0),
+                ),
+            )
             tools_list = [
                 open_application, create_note, read_note, search_notes, search_notes_semantic,
-                get_todays_activity, get_note_clusters, write_note, append_to_note, editar_nota,
+                get_todays_activity, get_note_clusters, revisar_memoria,
+                marcar_entidades_distintas, ignorar_nota_suelta,
+                ficha_entidad, write_note, append_to_note, editar_nota,
                 get_clipboard_content, set_clipboard_content,
                 crear_recordatorio, listar_recordatorios,
             ]
@@ -73,12 +128,20 @@ class GeminiWorker(QThread):
                 "Antes de guardar, busca notas con `search_notes`. Si existen, actualízalas con `write_note` o `append_to_note` para no duplicar.\n"
                 "Para cambiar un dato puntual de una nota existente (una fecha, un nombre, una línea), usa `editar_nota(title, buscar, reemplazar)` con el fragmento exacto a cambiar, en lugar de reescribir la nota entera con `write_note`. Si no conoces el texto exacto, léela antes con `read_note`.\n"
                 "Siempre que te pregunten sobre algún proyecto, concepto, tarea o información del usuario, busca en su memoria antes de responder: usa `search_notes_semantic` para preguntas abiertas o conceptuales (temas, ideas, 'qué sé sobre...'), `search_notes` para palabras o títulos exactos, y `read_note` si conoces el nombre de la nota.\n"
+                "Si pregunta por una entidad concreta (una persona, empresa, proyecto o lugar: 'cuéntame sobre X', 'qué sabes de X', 'quién es X'), usa `ficha_entidad` — agrega su nota, las menciones dispersas y lo relacionado — y redacta un retrato completo y natural.\n"
                 "Si el usuario pide un resumen de su día, un diario o un repaso de lo que hizo: llama a `get_todays_activity`, y con esos datos redacta un resumen estructurado (temas, logros, ideas y conexiones con notas anteriores) que guardas con `create_note` titulada 'Diario AAAA-MM-DD' (fecha de hoy) enlazada al perfil. Confírmalo de forma cálida y cotidiana.\n"
                 "Si pregunta qué temas tiene, en qué se repite, o quiere descubrir/organizar patrones en sus notas, usa `get_note_clusters` y preséntale los temas de forma natural.\n"
-                f"Fecha y hora actuales: {datetime.now().strftime('%Y-%m-%d %H:%M')}. Para recordatorios con hora usa `crear_recordatorio` con `fecha_hora` 'YYYY-MM-DD HH:MM' (o `en_minutos`); usa `listar_recordatorios` para consultarlos.\n"
+                "Si pide revisar, ordenar o limpiar su memoria: llama a `revisar_memoria`, cuéntale en lenguaje natural qué se reparó y qué encontraste, y para los posibles duplicados PREGUNTA antes de fusionar (si confirma que son la misma, junta el contenido en una nota con `write_note` y corrige los enlaces con `editar_nota`; si responde que son DISTINTAS, llama a `marcar_entidades_distintas` para no volver a preguntarlo). Si quiere dejar una nota sin conexiones, usa `ignorar_nota_suelta`.\n"
+                # Redondeado a la hora (no al minuto): el system prompt se mantiene
+                # idéntico durante la sesión y aprovecha el caching implícito de
+                # Gemini 2.5 (activado por defecto; solo cachea si el inicio de la
+                # petición es exactamente igual entre llamadas).
+                f"Fecha y hora actuales (aprox.): {datetime.now().strftime('%Y-%m-%d %H:00')}. Para recordatorios con hora usa `crear_recordatorio` con `fecha_hora` 'YYYY-MM-DD HH:MM' (o `en_minutos`); usa `listar_recordatorios` para consultarlos.\n"
                 "Si necesitas llamar a una función/herramienta, hazlo directamente sin generar texto explicativo en ese turno. Genera tu respuesta de texto únicamente cuando ya tengas todos los resultados de las herramientas.\n"
                 f"En el contenido de los archivos creados/editados (NUNCA en tu respuesta), debes enlazar obligatoriamente al perfil usando la sintaxis `[[{settings.user_profile}]]` y, a su vez, enlazar desde la nota de perfil `{settings.user_profile}` a la nueva nota temática usando `[[Nombre Nota]]` (enlace bidireccional obligatorio con corchetes dobles).\n"
-                "Genera etiquetas (tags) sin '#' al crear/editar notas, combinando: (1) TEMAS (ej: profesional, tareas, ia, estudios) y (2) ENTIDADES concretas mencionadas con prefijo jerárquico — personas como `persona/Nombre`, proyectos como `proyecto/Nombre`, lugares como `lugar/Sitio`. Sin espacios ni acentos raros; usa solo las entidades realmente relevantes de la nota.\n"
+                + _graph_rules(settings.user_profile) +
+                "Genera etiquetas (tags) sin '#' al crear/editar notas, combinando: (1) TEMAS (ej: profesional, tareas, ia, estudios) y (2) ENTIDADES concretas mencionadas con prefijo jerárquico — personas como `persona/Nombre`, proyectos como `proyecto/Nombre`, lugares como `lugar/Sitio`. Sin espacios ni acentos raros; usa solo las entidades realmente relevantes de la nota. Añade además (3) la ESFERA de la nota cuando sea clara: `contexto/trabajo` o `contexto/personal` (si es ambigua, omítela).\n"
+                "Si la pregunta del usuario pertenece claramente a una esfera (su empresa/tareas → trabajo; amigos/casa/hobbies → personal), pasa `contexto='trabajo'` o `contexto='personal'` a `search_notes_semantic` para no mezclar mundos.\n"
                 "Tienes acceso al portapapeles con `get_clipboard_content` y `set_clipboard_content`. Úsalos cuando te pidan leer/guardar info copiada o guardar resúmenes en el portapapeles.\n"
                 "Si te piden abrir una aplicación, invoca 'open_application'.\n"
                 "Al finalizar, da una confirmación natural y humana de una sola línea."
@@ -120,6 +183,8 @@ class GeminiWorker(QThread):
                 turn_text = ""
 
                 for chunk in response_stream:
+                    if self._cancelled:
+                        return  # turno cancelado por el usuario: sin más tokens ni herramientas
                     if hasattr(chunk, 'usage_metadata') and chunk.usage_metadata:
                         turn_usage = chunk.usage_metadata
 
@@ -134,6 +199,9 @@ class GeminiWorker(QThread):
                             self.token_received.emit(chunk.text)
                     except Exception:
                         pass
+
+                if self._cancelled:
+                    return  # cancelado: no ejecutar herramientas pendientes
 
                 if turn_usage:
                     total_prompt_tokens += getattr(turn_usage, 'prompt_token_count', 0) or 0
@@ -193,8 +261,13 @@ class GeminiReasoningWorker(QThread):
         self.image_path = image_path
         self.history = history or []          # turnos previos (memoria conversacional)
         self.result_contents = []             # conversación actualizada tras este turno
+        self._cancelled = False               # cancelación cooperativa (ver cancel())
         self.api_key = settings.gemini_api_key
         self.model_name = settings.gemini_model_reasoning
+
+    def cancel(self):
+        """Pide cancelar el turno en curso; el bucle de streaming lo respeta."""
+        self._cancelled = True
 
     def run(self):
         if not self.api_key:
@@ -202,10 +275,21 @@ class GeminiReasoningWorker(QThread):
             return
 
         try:
-            client = genai.Client(api_key=self.api_key)
+            # Timeout duro por petición (evita que la UI quede en "Pensando…" para
+            # siempre si la conexión se cuelga) + 1 reintento ante errores
+            # transitorios (408/429/5xx) con backoff.
+            client = genai.Client(
+                api_key=self.api_key,
+                http_options=types.HttpOptions(
+                    timeout=120_000,  # ms
+                    retry_options=types.HttpRetryOptions(attempts=2, initial_delay=1.0),
+                ),
+            )
             tools_list = [
                 open_application, create_note, read_note, search_notes, search_notes_semantic,
-                get_todays_activity, get_note_clusters, write_note, append_to_note, editar_nota,
+                get_todays_activity, get_note_clusters, revisar_memoria,
+                marcar_entidades_distintas, ignorar_nota_suelta,
+                ficha_entidad, write_note, append_to_note, editar_nota,
                 get_clipboard_content, set_clipboard_content,
                 crear_recordatorio, listar_recordatorios,
             ]
@@ -219,12 +303,20 @@ class GeminiReasoningWorker(QThread):
                 "Antes de guardar, busca notas con `search_notes`. Si existen, actualízalas con `write_note` o `append_to_note` para evitar duplicados.\n"
                 "Para cambiar un dato puntual de una nota existente (una fecha, un nombre, una línea), usa `editar_nota(title, buscar, reemplazar)` con el fragmento exacto, en lugar de reescribir toda la nota. Si no sabes el texto exacto, léela antes con `read_note`.\n"
                 "Siempre que te pregunten sobre algún proyecto, concepto, tarea o información del usuario, busca en su memoria antes de responder: usa `search_notes_semantic` para preguntas abiertas o conceptuales (temas, ideas, 'qué sé sobre...'), `search_notes` para palabras o títulos exactos, y `read_note` si conoces el nombre de la nota.\n"
+                "Si pregunta por una entidad concreta (una persona, empresa, proyecto o lugar: 'cuéntame sobre X', 'qué sabes de X', 'quién es X'), usa `ficha_entidad` — agrega su nota, las menciones dispersas y lo relacionado — y redacta un retrato completo y natural.\n"
                 "Si el usuario pide un resumen de su día, un diario o un repaso: llama a `get_todays_activity` y, con esos datos, redacta un resumen estructurado y reflexivo (temas, logros, ideas y conexiones con notas anteriores) que guardas con `create_note` titulada 'Diario AAAA-MM-DD' (fecha de hoy) enlazada al perfil. Confírmalo de forma cálida.\n"
                 "Si pregunta qué temas tiene, en qué se repite, o quiere descubrir/organizar patrones en sus notas, usa `get_note_clusters` y preséntale los temas con una breve reflexión.\n"
-                f"Fecha y hora actuales: {datetime.now().strftime('%Y-%m-%d %H:%M')}. Para recordatorios con hora usa `crear_recordatorio` con `fecha_hora` 'YYYY-MM-DD HH:MM' (o `en_minutos`); usa `listar_recordatorios` para consultarlos.\n"
+                "Si pide revisar, ordenar o limpiar su memoria: llama a `revisar_memoria`, cuéntale qué se reparó y qué encontraste, y para los posibles duplicados PREGUNTA antes de fusionar (si confirma que son la misma, junta el contenido en una nota con `write_note` y corrige los enlaces con `editar_nota`; si responde que son DISTINTAS, llama a `marcar_entidades_distintas` para no volver a preguntarlo). Si quiere dejar una nota sin conexiones, usa `ignorar_nota_suelta`.\n"
+                # Redondeado a la hora (no al minuto): el system prompt se mantiene
+                # idéntico durante la sesión y aprovecha el caching implícito de
+                # Gemini 2.5 (activado por defecto; solo cachea si el inicio de la
+                # petición es exactamente igual entre llamadas).
+                f"Fecha y hora actuales (aprox.): {datetime.now().strftime('%Y-%m-%d %H:00')}. Para recordatorios con hora usa `crear_recordatorio` con `fecha_hora` 'YYYY-MM-DD HH:MM' (o `en_minutos`); usa `listar_recordatorios` para consultarlos.\n"
                 "Si necesitas llamar a una función/herramienta, hazlo directamente sin generar texto explicativo en ese turno. Genera tu respuesta de texto únicamente cuando ya tengas todos los resultados de las herramientas.\n"
                 f"En el contenido de los archivos creados/editados (NUNCA en tu respuesta), debes enlazar obligatoriamente al perfil usando la sintaxis `[[{settings.user_profile}]]` y, a su vez, enlazar desde la nota de perfil `{settings.user_profile}` a la nueva nota temática usando `[[Nombre Nota]]` (enlace bidireccional obligatorio con corchetes dobles).\n"
-                "Genera etiquetas (tags) sin '#' al crear/editar notas, combinando: (1) TEMAS (ej: profesional, tareas, ia, estudios) y (2) ENTIDADES concretas mencionadas con prefijo jerárquico — personas como `persona/Nombre`, proyectos como `proyecto/Nombre`, lugares como `lugar/Sitio`. Sin espacios ni acentos raros; usa solo las entidades realmente relevantes de la nota.\n"
+                + _graph_rules(settings.user_profile) +
+                "Genera etiquetas (tags) sin '#' al crear/editar notas, combinando: (1) TEMAS (ej: profesional, tareas, ia, estudios) y (2) ENTIDADES concretas mencionadas con prefijo jerárquico — personas como `persona/Nombre`, proyectos como `proyecto/Nombre`, lugares como `lugar/Sitio`. Sin espacios ni acentos raros; usa solo las entidades realmente relevantes de la nota. Añade además (3) la ESFERA de la nota cuando sea clara: `contexto/trabajo` o `contexto/personal` (si es ambigua, omítela).\n"
+                "Si la pregunta del usuario pertenece claramente a una esfera (su empresa/tareas → trabajo; amigos/casa/hobbies → personal), pasa `contexto='trabajo'` o `contexto='personal'` a `search_notes_semantic` para no mezclar mundos.\n"
                 "Tienes acceso al portapapeles con `get_clipboard_content` y `set_clipboard_content`. Úsalos cuando sea relevante para capturar o guardar información.\n"
                 f"Si diseñas rutinas/planes/proyectos, guárdalos con `write_note` y enlázalos a `[[{settings.user_profile}]]` de forma invisible. Confírmalo en lenguaje cotidiano y cercano."
             )
@@ -265,6 +357,8 @@ class GeminiReasoningWorker(QThread):
                 turn_text = ""
 
                 for chunk in response_stream:
+                    if self._cancelled:
+                        return  # turno cancelado por el usuario: sin más tokens ni herramientas
                     if hasattr(chunk, 'usage_metadata') and chunk.usage_metadata:
                         turn_usage = chunk.usage_metadata
 
@@ -279,6 +373,9 @@ class GeminiReasoningWorker(QThread):
                             self.token_received.emit(chunk.text)
                     except Exception:
                         pass
+
+                if self._cancelled:
+                    return  # cancelado: no ejecutar herramientas pendientes
 
                 if turn_usage:
                     total_prompt_tokens += getattr(turn_usage, 'prompt_token_count', 0) or 0

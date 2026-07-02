@@ -48,6 +48,29 @@ def _upsert_env(updates: dict):
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _validate_gemini_key(key: str):
+    """
+    Comprueba la clave con una llamada mínima y gratuita (count_tokens).
+    Devuelve None si es válida, o un mensaje de error si NO lo es.
+    Si no hay internet no bloquea el setup (no se puede verificar): devuelve None.
+    """
+    try:
+        from google import genai
+        from google.genai import types as gtypes
+        client = genai.Client(
+            api_key=key,
+            http_options=gtypes.HttpOptions(timeout=10_000),
+        )
+        client.models.count_tokens(model="gemini-2.5-flash", contents="hola")
+        return None
+    except Exception as e:
+        m = str(e).lower()
+        if ("api key" in m or "api_key" in m or "permission" in m
+                or "401" in m or "403" in m or "invalid" in m or "400" in m):
+            return "Esa clave de Gemini no es válida. Revísala (aistudio.google.com/apikey)."
+        return None  # error de red u otro: no bloquear el setup por esto
+
+
 def _section(text, parent):
     lbl = QLabel(text.upper(), parent)
     lbl.setStyleSheet(
@@ -228,12 +251,33 @@ class OnboardingDialog(QDialog):
         if not vault:
             self.warning.setText("Falta la carpeta donde guardar las notas.")
             return
-        # Crear la carpeta si no existe (plug & play: el usuario no la prepara a mano)
+        # Crear la carpeta si no existe (plug & play) y comprobar que se puede
+        # ESCRIBIR de verdad (rutas de red, OneDrive sin sincronizar, permisos…):
+        # mejor fallar aquí, con contexto, que después al guardar la primera nota.
         try:
             Path(vault).mkdir(parents=True, exist_ok=True)
+            probe = Path(vault) / ".lia_write_test"
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink()
         except Exception as e:
-            self.warning.setText(f"No pude crear la carpeta: {e}")
+            self.warning.setText(f"No puedo escribir en esa carpeta: {e}")
             return
+        # Validar la clave con una llamada real mínima (evita "completar" el setup
+        # con una clave mal copiada y descubrirlo en el primer mensaje).
+        self.warning.setStyleSheet(
+            "color: %s; font-family: %s; font-size: 11px; background: transparent;"
+            % (styles.ACCENT_SOFT, styles.FONT))
+        self.warning.setText("Comprobando la clave de Gemini…")
+        from PyQt6.QtWidgets import QApplication
+        QApplication.processEvents()
+        err = _validate_gemini_key(key)
+        self.warning.setStyleSheet(
+            "color: %s; font-family: %s; font-size: 11px; background: transparent;"
+            % (styles.DANGER, styles.FONT))
+        if err:
+            self.warning.setText(err)
+            return
+        self.warning.setText("")
         self._result = {
             "name": name or "Usuario",
             "key": key,

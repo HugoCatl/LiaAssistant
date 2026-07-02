@@ -16,6 +16,20 @@ def main():
     # Initialize PyQt application
     app = QApplication(sys.argv)
 
+    # Instancia única: dos LIA a la vez escribirían sobre el mismo vault,
+    # historial y feedback (corrupción silenciosa). QLockFile detecta y limpia
+    # locks huérfanos de procesos que murieron sin liberar.
+    from PyQt6.QtCore import QLockFile
+    from config.paths import app_data_dir
+    lock = QLockFile(str(app_data_dir() / "lia.lock"))
+    lock.setStaleLockTime(30_000)
+    if not lock.tryLock(100):
+        from PyQt6.QtWidgets import QMessageBox
+        QMessageBox.information(
+            None, "LIA",
+            "LIA ya está en ejecución.\nBúscala en la bandeja del sistema (junto al reloj).")
+        return
+
     # CRITICAL: Prevent application from quitting when the view window is hidden.
     # This allows the background daemon to capture global hotkeys in the background.
     app.setQuitOnLastWindowClosed(False)

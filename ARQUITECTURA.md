@@ -106,6 +106,12 @@ LIA es una aplicación de escritorio **Python + PyQt6** estructurada por capas. 
 - **`semantic_search.py`** — Herramienta `search_notes_semantic(query)`; cae a búsqueda por palabra si el modelo no está.
 - **`auto_link.py`** — Al crear una nota, busca las afines por significado y añade una sección **`🔗 Relacionado`** con enlaces `[[ ]]`. Idempotente y a prueba de fallos.
 - **`topic_clusters.py`** — Clustering de **temas latentes** (KMeans esférico en numpy) sobre los vectores. Herramienta `get_note_clusters()`.
+- **`vault_gardener.py`** — **Jardinero del grafo**: pase de mantenimiento determinista (sin LLM). Repara solo los enlaces de un solo sentido y reporta enlaces rotos, títulos casi duplicados y notas huérfanas. Herramienta `revisar_memoria()` ("ordena mi memoria").
+- **`entity_card.py`** — **Ficha de entidad**: agrega todo lo sabido sobre una persona/empresa/proyecto (su nota + menciones dispersas en otras notas + afines por significado), con resolución difusa del nombre. Herramienta `ficha_entidad()` ("cuéntame sobre X").
+
+Detalles del ranking semántico: `SemanticIndex.search()` aplica el umbral de relevancia sobre el coseno **crudo** y después reordena con un **boost por recencia** (vida media 30 días) — la frescura desempata, nunca cuela irrelevantes. `search_notes_semantic` acepta además `contexto='trabajo'|'personal'` para no mezclar esferas (las notas sin etiqueta de esfera siempre se incluyen).
+
+**Grafo visual (`src/gui/graph_view.py`)** — la memoria se puede VER sin Obsidian: scan del jardinero → layout de fuerzas Fruchterman-Reingold (numpy puro, determinista) → canvas QPainter indigo (nodos por grado de conexión, hub resaltado). Se abre desde el panel ⓘ → "Ver mi grafo".
 - **`daily_summary.py`** — Herramienta `get_todays_activity()`: recopila lo capturado hoy y sus conexiones; Gemini redacta el digest y lo guarda como `Diario AAAA-MM-DD`.
 
 ### 3.6. Persistencia (`src/storage/`)

@@ -69,6 +69,7 @@ class Orchestrator(QObject):
         self.state_manager.state_changed.connect(self.on_state_changed)
         self.view.input_field.returnPressed.connect(self.handle_input_submission)
         self.view.input_field.recall_requested.connect(self._recall_last_message)
+        self.view.escape_handler = self.cancel_current_turn  # Esc cancela la generación
 
         # Wire settings config wheel and microphone recording buttons
         self.view.config_button.clicked.connect(self.open_settings)
@@ -142,11 +143,44 @@ class Orchestrator(QObject):
         self.view.input_field.setText(text)
         self.view.input_field.setFocus()
 
+    def _run_prompt(self, text: str):
+        """Lanza un turno directamente (acciones de un clic del panel de info)."""
+        self.view.input_field.setText(text)
+        self.handle_input_submission()
+
     def _recall_last_message(self):
         """↑ con el campo vacío: recupera el último mensaje enviado."""
         if self._last_user_text:
             self.view.input_field.setText(self._last_user_text)
             self.view.input_field.end(False)
+
+    def show_graph_view(self):
+        """Abre la ventana con el grafo de la memoria (notas y conexiones)."""
+        try:
+            from src.services.vault_gardener import _scan
+            from src.storage.obsidian_manager import get_vault_path
+            from src.gui.graph_view import GraphWindow
+            self._graph_window = GraphWindow(_scan(get_vault_path()))
+            self._graph_window.show()
+        except Exception as e:
+            logging.getLogger("lia").warning("No pude abrir el grafo: %s", e)
+            self.view.chat.add_system("No pude dibujar el grafo ahora mismo.", "error")
+
+    def cancel_current_turn(self) -> bool:
+        """
+        Cancela la generación en curso (Esc). Devuelve True si había algo que
+        cancelar; False deja que el Esc siga su curso normal (ocultar panel).
+        """
+        if not (self.worker and self.worker.isRunning()):
+            return False
+        try:
+            self.worker.cancel()
+        except Exception:
+            pass
+        self.view.chat.end_lia(self.current_response_text)  # cierra la burbuja con lo recibido
+        self.view.chat.add_system("Generación cancelada", "warning")
+        self.state_manager.set_state(AssistantState.IDLE)
+        return True
 
     def show_info_menu(self):
         """Muestra el panel de acciones rápidas (ejemplos + acciones) rediseñado."""
@@ -164,6 +198,11 @@ class Orchestrator(QObject):
                  "callback": lambda: self._prefill("Busca en mis notas sobre ")},
             ]),
             ("Acciones", [
+                {"emoji": "🕸️", "title": "Ver mi grafo",
+                 "subtitle": "Tus notas y sus conexiones", "callback": self.show_graph_view},
+                {"emoji": "🌱", "title": "Revisar mi memoria",
+                 "subtitle": "Repara enlaces y detecta duplicados",
+                 "callback": lambda: self._run_prompt("Revisa mi memoria y cuéntame qué has encontrado.")},
                 {"emoji": "🆕", "title": "Nueva conversación",
                  "subtitle": "Empieza de cero", "callback": self.reset_conversation},
                 {"emoji": "⚙️", "title": "Ajustes",
@@ -512,8 +551,9 @@ class Orchestrator(QObject):
             self.view.chat.add_system(f"Tokens · entrada {p} · salida {c} · total {t}", "meta")
             self._pending_meta = None
 
-        # Trigger text to speech on the generated text
-        if self.current_response_text:
+        # Trigger text to speech on the generated text (salvo turno cancelado)
+        was_cancelled = bool(self.worker and getattr(self.worker, "_cancelled", False))
+        if self.current_response_text and not was_cancelled:
             TTSService.get_instance().speak(self.current_response_text)
 
         # Conserva la conversación actualizada (memoria entre turnos), acotada

@@ -100,3 +100,28 @@ def test_empty_vault_returns_no_results(tmp_path):
     v.mkdir()
     idx = SemanticIndex(str(v), StubEmbedder(), cache_dir=str(tmp_path / "cache"))
     assert idx.search("lo que sea") == []
+
+
+def test_recency_breaks_ties(tmp_path):
+    """A igualdad semántica, la nota reciente gana a la antigua."""
+    import time
+    v = tmp_path / "vault"
+    v.mkdir()
+    _write(str(v), "Vieja.md", "receta de cocina")
+    _write(str(v), "Nueva.md", "receta de cocina")
+    old = time.time() - 180 * 86_400  # hace 6 meses
+    os.utime(os.path.join(str(v), "Vieja.md"), (old, old))
+    idx = SemanticIndex(str(v), StubEmbedder(), cache_dir=str(tmp_path / "cache"))
+    res = idx.search("receta cocina", top_k=2)
+    assert [r["title"] for r in res] == ["Nueva", "Vieja"]
+
+
+def test_recency_cannot_rescue_irrelevant(tmp_path):
+    """La frescura no cuela notas por debajo del umbral de relevancia."""
+    v = tmp_path / "vault"
+    v.mkdir()
+    _write(str(v), "Japon.md", "viaje a japon")          # relevante
+    _write(str(v), "Cocina.md", "receta de cocina")      # irrelevante y fresquísima
+    idx = SemanticIndex(str(v), StubEmbedder(), cache_dir=str(tmp_path / "cache"))
+    res = idx.search("viaje japon", top_k=5, min_score=0.5)
+    assert [r["title"] for r in res] == ["Japon"]
